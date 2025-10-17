@@ -27,6 +27,8 @@ import CalendarCreate from './pages/Calendar/CalendarCreate';
 // User Pages
 import Profile from './pages/User/Profile';
 import Users from './pages/User/Users';
+import Researchers from './pages/User/Researchers';
+import Settings from './pages/User/Settings';
 
 // Admin Pages
 import AdminDashboard from './pages/Admin/AdminDashboard';
@@ -109,6 +111,16 @@ function App() {
           <Route path="users" element={
             <ProtectedRoute allowedRoles={['admin']}>
               <Users />
+            </ProtectedRoute>
+          } />
+          <Route path="researchers" element={
+            <ProtectedRoute>
+              <Researchers />
+            </ProtectedRoute>
+          } />
+          <Route path="settings" element={
+            <ProtectedRoute>
+              <Settings />
             </ProtectedRoute>
           } />
 
