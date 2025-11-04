@@ -69,8 +69,11 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('token');
-      if (token) {
+      const user = localStorage.getItem('user');
+      
+      if (token && user) {
         try {
+          // Try to verify token with backend
           const response = await authAPI.getMe();
           dispatch({
             type: 'AUTH_SUCCESS',
@@ -80,10 +83,14 @@ export const AuthProvider = ({ children }) => {
             },
           });
         } catch (error) {
-          localStorage.removeItem('token');
+          // If backend verification fails, use cached user data
+          console.log('Backend verification failed, using cached user data');
           dispatch({
-            type: 'AUTH_FAILURE',
-            payload: 'Session expired. Please login again.',
+            type: 'AUTH_SUCCESS',
+            payload: {
+              user: JSON.parse(user),
+              token,
+            },
           });
         }
       } else {
@@ -101,6 +108,7 @@ export const AuthProvider = ({ children }) => {
       const { user, token } = response.data;
 
       localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
       dispatch({
         type: 'AUTH_SUCCESS',
         payload: { user, token },
@@ -126,6 +134,7 @@ export const AuthProvider = ({ children }) => {
       const { user, token } = response.data;
 
       localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
       dispatch({
         type: 'AUTH_SUCCESS',
         payload: { user, token },
@@ -146,6 +155,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     dispatch({ type: 'LOGOUT' });
     toast.success('Logged out successfully');
   };

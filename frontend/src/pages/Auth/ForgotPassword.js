@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import BackgroundImage from '../../components/UI/BackgroundImage';
+import { authAPI } from '../../services/api';
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
@@ -16,23 +17,10 @@ const ForgotPassword = () => {
     setError('');
 
     try {
-      const response = await fetch('/api/forgot-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setIsSuccess(true);
-      } else {
-        throw new Error(data.message || 'Failed to send reset link');
-      }
+      await authAPI.forgotPassword(email);
+      setIsSuccess(true);
     } catch (error) {
-      setError(error.message);
+      setError(error?.response?.data?.message || error.message || 'Failed to send reset link');
     } finally {
       setIsLoading(false);
     }

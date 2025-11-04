@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import BackgroundImage from '../../components/UI/BackgroundImage';
+import { authAPI } from '../../services/api';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -35,27 +36,14 @@ const Register = () => {
     }
 
     try {
-      const response = await fetch('/api/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password
-        })
+      await authAPI.register({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password
       });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        navigate('/auth/login');
-      } else {
-        throw new Error(data.message || 'Registration failed');
-      }
+      navigate('/auth/login');
     } catch (error) {
-      setError(error.message);
+      setError(error?.response?.data?.message || error.message || 'Registration failed');
     } finally {
       setIsLoading(false);
     }

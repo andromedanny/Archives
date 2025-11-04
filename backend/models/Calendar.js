@@ -8,68 +8,52 @@ const Calendar = sequelize.define('Calendar', {
     autoIncrement: true
   },
   title: {
-    type: DataTypes.STRING(100),
+    type: DataTypes.STRING(200),
     allowNull: false,
     validate: {
       notEmpty: {
         msg: 'Event title is required'
       },
       len: {
-        args: [1, 100],
-        msg: 'Title cannot exceed 100 characters'
+        args: [1, 200],
+        msg: 'Title cannot exceed 200 characters'
       }
     }
   },
   description: {
-    type: DataTypes.STRING(500),
-    allowNull: true,
-    validate: {
-      len: {
-        args: [0, 500],
-        msg: 'Description cannot exceed 500 characters'
-      }
-    }
+    type: DataTypes.TEXT,
+    allowNull: true
   },
-  startDate: {
-    type: DataTypes.DATEONLY,
+  eventType: {
+    type: DataTypes.ENUM('thesis_submission', 'thesis_defense', 'title_defense', 'meeting', 'deadline', 'other'),
+    allowNull: false,
+    defaultValue: 'other'
+  },
+  eventDate: {
+    type: DataTypes.DATE,
     allowNull: false
   },
   endDate: {
-    type: DataTypes.DATEONLY,
-    allowNull: false
-  },
-  startTime: {
-    type: DataTypes.TIME,
-    allowNull: false
-  },
-  endTime: {
-    type: DataTypes.TIME,
-    allowNull: false
+    type: DataTypes.DATE,
+    allowNull: true
   },
   location: {
-    type: DataTypes.STRING(100),
-    allowNull: true,
-    validate: {
-      len: {
-        args: [0, 100],
-        msg: 'Location cannot exceed 100 characters'
-      }
-    }
-  },
-  eventType: {
-    type: DataTypes.ENUM('Thesis Defense', 'Submission Deadline', 'Review Meeting', 'Workshop', 'Conference', 'Other'),
-    allowNull: false
+    type: DataTypes.STRING(200),
+    allowNull: true
   },
   department: {
     type: DataTypes.STRING,
-    allowNull: false,
-    validate: {
-      notEmpty: {
-        msg: 'Department is required'
-      }
+    allowNull: true
+  },
+  thesisId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'theses',
+      key: 'id'
     }
   },
-  createdById: {
+  organizerId: {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
@@ -86,138 +70,102 @@ const Calendar = sequelize.define('Calendar', {
     type: DataTypes.BOOLEAN,
     defaultValue: false
   },
-  recurringPattern: {
+  recurrencePattern: {
     type: DataTypes.JSON,
     allowNull: true
   },
-  isAllDay: {
+  isPublic: {
     type: DataTypes.BOOLEAN,
-    defaultValue: false
-  },
-  priority: {
-    type: DataTypes.ENUM('Low', 'Medium', 'High', 'Critical'),
-    defaultValue: 'Medium'
+    defaultValue: true
   },
   status: {
-    type: DataTypes.ENUM('Scheduled', 'In Progress', 'Completed', 'Cancelled', 'Postponed'),
-    defaultValue: 'Scheduled'
+    type: DataTypes.ENUM('scheduled', 'in_progress', 'completed', 'cancelled'),
+    defaultValue: 'scheduled'
   },
-  reminders: {
+  metadata: {
     type: DataTypes.JSON,
     allowNull: true,
-    defaultValue: []
-  },
-  attachments: {
-    type: DataTypes.JSON,
-    allowNull: true,
-    defaultValue: []
-  },
-  notes: {
-    type: DataTypes.STRING(1000),
-    allowNull: true,
-    validate: {
-      len: {
-        args: [0, 1000],
-        msg: 'Notes cannot exceed 1000 characters'
-      }
-    }
+    defaultValue: {}
   }
 }, {
-  tableName: 'calendars',
+  tableName: 'calendar_events',
   indexes: [
-    { fields: ['startDate', 'endDate'] },
-    { fields: ['department'] },
+    { fields: ['eventDate'] },
     { fields: ['eventType'] },
-    { fields: ['createdById'] },
-    { fields: ['status'] }
+    { fields: ['department'] },
+    { fields: ['thesisId'] },
+    { fields: ['organizerId'] },
+    { fields: ['status'] },
+    { fields: ['isPublic'] }
   ]
 });
 
 // Instance methods
-Calendar.prototype.getDuration = function() {
-  if (this.isAllDay) {
-    const start = new Date(this.startDate);
-    const end = new Date(this.endDate);
-    const diffTime = Math.abs(end - start);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return `${diffDays} day(s)`;
-  }
-  
-  const startTime = this.startTime.split(':');
-  const endTime = this.endTime.split(':');
-  const startMinutes = parseInt(startTime[0]) * 60 + parseInt(startTime[1]);
-  const endMinutes = parseInt(endTime[0]) * 60 + parseInt(endTime[1]);
-  const durationMinutes = endMinutes - startMinutes;
-  
-  const hours = Math.floor(durationMinutes / 60);
-  const minutes = durationMinutes % 60;
-  
-  return `${hours}h ${minutes}m`;
-};
-
-Calendar.prototype.isHappeningNow = function() {
-  const now = new Date();
-  const startDateTime = new Date(`${this.startDate} ${this.startTime}`);
-  const endDateTime = new Date(`${this.endDate} ${this.endTime}`);
-  
-  return now >= startDateTime && now <= endDateTime;
-};
-
 Calendar.prototype.isUpcoming = function() {
-  const now = new Date();
-  const startDateTime = new Date(`${this.startDate} ${this.startTime}`);
-  
-  return startDateTime > now;
+  return new Date(this.eventDate) > new Date();
+};
+
+Calendar.prototype.isPast = function() {
+  return new Date(this.eventDate) < new Date();
+};
+
+Calendar.prototype.getDuration = function() {
+  if (this.endDate) {
+    const start = new Date(this.eventDate);
+    const end = new Date(this.endDate);
+    return Math.round((end - start) / (1000 * 60)); // Duration in minutes
+  }
+  return null;
 };
 
 // Static methods
-Calendar.getEventsByDateRange = async function(startDate, endDate, department = null) {
-  const { Op } = require('sequelize');
+Calendar.getUpcomingEvents = async function(limit = 10, department = null) {
   const whereClause = {
-    startDate: { [Op.gte]: startDate },
-    endDate: { [Op.lte]: endDate }
+    eventDate: {
+      [require('sequelize').Op.gte]: new Date()
+    },
+    status: 'scheduled'
   };
-  
+
   if (department) {
     whereClause.department = department;
   }
-  
+
   return await this.findAll({
     where: whereClause,
+    order: [['eventDate', 'ASC']],
+    limit,
     include: [
       {
         model: sequelize.models.User,
-        as: 'createdBy',
-        attributes: ['id', 'firstName', 'lastName', 'email']
+        as: 'organizer',
+        attributes: ['id', 'firstName', 'lastName']
       }
-    ],
-    order: [['startDate', 'ASC'], ['startTime', 'ASC']]
+    ]
   });
 };
 
-Calendar.getUpcomingEvents = async function(limit = 10, department = null) {
-  const { Op } = require('sequelize');
-  const now = new Date();
+Calendar.getEventsByDateRange = async function(startDate, endDate, department = null) {
   const whereClause = {
-    startDate: { [Op.gte]: now },
-    status: { [Op.in]: ['Scheduled', 'In Progress'] }
+    eventDate: {
+      [require('sequelize').Op.between]: [startDate, endDate]
+    }
   };
-  
+
   if (department) {
     whereClause.department = department;
   }
-  
+
   return await this.findAll({
     where: whereClause,
+    order: [['eventDate', 'ASC']],
     include: [
       {
         model: sequelize.models.User,
-        as: 'createdBy',
-        attributes: ['id', 'firstName', 'lastName', 'email']
+        as: 'organizer',
+        attributes: ['id', 'firstName', 'lastName']
       }
-    ],
-    order: [['startDate', 'ASC'], ['startTime', 'ASC']],
-    limit: limit
+    ]
   });
 };
 

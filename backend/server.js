@@ -13,6 +13,7 @@ const userRoutes = require('./routes/users');
 const thesisRoutes = require('./routes/thesis');
 const calendarRoutes = require('./routes/calendar');
 const adminRoutes = require('./routes/admin');
+const dashboardRoutes = require('./routes/dashboard');
 
 const app = express();
 
@@ -55,6 +56,12 @@ app.use('/api/users', userRoutes);
 app.use('/api/thesis', thesisRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+
+// Test dashboard route directly
+app.get('/api/dashboard/test-direct', (req, res) => {
+  res.json({ message: 'Direct dashboard route works!', timestamp: new Date().toISOString() });
+});
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

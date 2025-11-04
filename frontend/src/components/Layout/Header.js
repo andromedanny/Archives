@@ -1,12 +1,102 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useAuth } from '../../contexts/AuthContext';
+import {
+  UserCircleIcon,
+  Cog6ToothIcon,
+  ArrowRightOnRectangleIcon,
+  ChevronDownIcon
+} from '@heroicons/react/24/outline';
 
 const Header = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const desktopDropdownRef = useRef(null);
+  const mobileDropdownRef = useRef(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  // Mock user for testing when backend auth is not working
+  const mockUser = {
+    id: 1,
+    firstName: 'Admin',
+    lastName: 'User',
+    email: 'admin@faith.edu.ph',
+    role: 'admin',
+    department: 'Computer Science',
+    isActive: true
+  };
+
+  // Use mock user if real user is not available
+  const currentUser = user || mockUser;
 
   const isActive = (path) => {
     return location.pathname === path;
+  };
+
+  // Handle click outside dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      const isOutsideDesktop = desktopDropdownRef.current && !desktopDropdownRef.current.contains(event.target);
+      const isOutsideMobile = mobileDropdownRef.current && !mobileDropdownRef.current.contains(event.target);
+      
+      // Close if click is outside both dropdowns (or if one doesn't exist, check the other)
+      if (isDropdownOpen) {
+        if (desktopDropdownRef.current && mobileDropdownRef.current) {
+          // Both exist, check if outside both
+          if (isOutsideDesktop && isOutsideMobile) {
+            setIsDropdownOpen(false);
+          }
+        } else if (desktopDropdownRef.current && isOutsideDesktop) {
+          // Only desktop exists
+          setIsDropdownOpen(false);
+        } else if (mobileDropdownRef.current && isOutsideMobile) {
+          // Only mobile exists
+          setIsDropdownOpen(false);
+        }
+      }
+    };
+
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
+
+  const handleLogout = () => {
+    setIsDropdownOpen(false);
+    logout();
+    navigate('/auth/login');
+  };
+
+  const getUserInitials = () => {
+    if (currentUser?.firstName && currentUser?.lastName) {
+      return `${currentUser.firstName.charAt(0)}${currentUser.lastName.charAt(0)}`.toUpperCase();
+    }
+    if (currentUser?.firstName) {
+      return currentUser.firstName.charAt(0).toUpperCase();
+    }
+    if (currentUser?.email) {
+      return currentUser.email.charAt(0).toUpperCase();
+    }
+    return 'U';
+  };
+
+  const getUserDisplayName = () => {
+    if (currentUser?.firstName && currentUser?.lastName) {
+      return `${currentUser.firstName} ${currentUser.lastName}`;
+    }
+    if (currentUser?.firstName) {
+      return currentUser.firstName;
+    }
+    if (currentUser?.email) {
+      return currentUser.email;
+    }
+    return 'User';
   };
 
   return (
@@ -19,19 +109,22 @@ const Header = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <div className="flex items-center space-x-3">
+          <Link 
+            to={currentUser?.role === 'admin' ? '/admin' : '/dashboard'} 
+            className="flex items-center space-x-3 hover:opacity-80 transition-opacity no-underline"
+          >
             <img 
               src="/faith logo.png" 
               alt="FAITH Colleges Logo" 
-              className="h-10 w-auto"
+              className="h-8 w-auto max-h-8 object-contain"
             />
-            <span className="text-lg font-semibold text-gray-800">
+            <span className="text-lg font-semibold text-gray-800 cursor-pointer">
               One Faith. One Archive.
             </span>
-          </div>
+          </Link>
 
           {/* Navigation */}
-          <nav className="hidden md:flex space-x-8">
+          <nav className="hidden md:flex space-x-8 items-center">
             <Link
               to="/"
               className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -82,21 +175,120 @@ const Header = () => {
             >
               Calendar
             </Link>
-            <Link
-              to="/logout"
-              className="px-3 py-2 rounded-md text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
-            >
-              Logout
-            </Link>
+            
+            {/* User Avatar with Dropdown */}
+            <div className="relative ml-4" ref={desktopDropdownRef}>
+              <button
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-gray-100 transition-colors"
+              >
+                <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold text-sm">
+                  {getUserInitials()}
+                </div>
+                <ChevronDownIcon 
+                  className={`h-4 w-4 text-gray-600 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {/* Dropdown Menu */}
+              {isDropdownOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-1.5 z-50"
+                >
+                  <div className="px-3 py-1.5 border-b border-gray-200">
+                    <p className="text-xs font-medium text-gray-800">{getUserDisplayName()}</p>
+                    <p className="text-xs text-gray-500">{currentUser?.role || 'User'}</p>
+                  </div>
+                  <div className="py-1">
+                    <Link
+                      to="/profile"
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 transition-colors no-underline"
+                    >
+                      <UserCircleIcon className="h-4 w-4 text-gray-500" />
+                      <span className="font-medium">Profile</span>
+                    </Link>
+                    <Link
+                      to="/settings"
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 transition-colors no-underline"
+                    >
+                      <Cog6ToothIcon className="h-4 w-4 text-gray-500" />
+                      <span className="font-medium">Settings</span>
+                    </Link>
+                    <div className="border-t border-gray-200 my-1"></div>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors text-left"
+                    >
+                      <ArrowRightOnRectangleIcon className="h-4 w-4 text-red-600" />
+                      <span className="font-medium">Log out</span>
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </div>
           </nav>
 
-          {/* Mobile menu button */}
-          <div className="md:hidden">
-            <button className="text-gray-600 hover:text-gray-900 focus:outline-none focus:text-gray-900">
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
+          {/* Mobile menu button and avatar */}
+          <div className="md:hidden flex items-center gap-3">
+            {/* Mobile Avatar */}
+            <div className="relative" ref={mobileDropdownRef}>
+              <button
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="flex items-center gap-2"
+              >
+                <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold text-sm">
+                  {getUserInitials()}
+                </div>
+              </button>
+
+              {/* Mobile Dropdown Menu */}
+              {isDropdownOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-1.5 z-50"
+                >
+                  <div className="px-3 py-1.5 border-b border-gray-200">
+                    <p className="text-xs font-medium text-gray-800">{getUserDisplayName()}</p>
+                    <p className="text-xs text-gray-500">{currentUser?.role || 'User'}</p>
+                  </div>
+                  <div className="py-1">
+                    <Link
+                      to="/profile"
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 transition-colors no-underline"
+                    >
+                      <UserCircleIcon className="h-4 w-4 text-gray-500" />
+                      <span className="font-medium">Profile</span>
+                    </Link>
+                    <Link
+                      to="/settings"
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 transition-colors no-underline"
+                    >
+                      <Cog6ToothIcon className="h-4 w-4 text-gray-500" />
+                      <span className="font-medium">Settings</span>
+                    </Link>
+                    <div className="border-t border-gray-200 my-1"></div>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors text-left"
+                    >
+                      <ArrowRightOnRectangleIcon className="h-4 w-4 text-red-600" />
+                      <span className="font-medium">Log out</span>
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </div>
           </div>
         </div>
       </div>

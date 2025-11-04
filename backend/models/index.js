@@ -16,12 +16,21 @@ Thesis.belongsTo(User, {
 });
 
 User.hasMany(Calendar, { 
-  foreignKey: 'createdById', 
-  as: 'createdEvents' 
+  foreignKey: 'organizerId', 
+  as: 'organizedEvents' 
 });
 Calendar.belongsTo(User, { 
-  foreignKey: 'createdById', 
-  as: 'createdBy' 
+  foreignKey: 'organizerId', 
+  as: 'organizer' 
+});
+
+Thesis.hasMany(Calendar, { 
+  foreignKey: 'thesisId', 
+  as: 'events' 
+});
+Calendar.belongsTo(Thesis, { 
+  foreignKey: 'thesisId', 
+  as: 'thesis' 
 });
 
 User.hasMany(Thesis, { 

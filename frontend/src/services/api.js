@@ -2,8 +2,10 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 
 // Create axios instance
+// In Vite, use import.meta.env for environment variables.
+// Prefer relative "/api" to use the dev proxy (see vite.config.js)
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+  baseURL: (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) || '/api',
   timeout: 10000,
 });
 
