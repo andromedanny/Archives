@@ -57,7 +57,7 @@ const ForgotPassword = () => {
           {isSuccess ? (
             <div className="text-center">
               <div className="text-green-600 text-sm bg-green-50 p-4 rounded-lg mb-6">
-                If this email exists, a reset link has been sent.
+                If this School ID exists, a reset link has been sent.
               </div>
               <Link 
                 to="/auth/login" 
@@ -72,15 +72,15 @@ const ForgotPassword = () => {
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                    Email Address
+                    School ID
                   </label>
                   <input
-                    type="email"
+                    type="text"
                     id="email"
                     name="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email"
+                    placeholder="Enter your School ID"
                     required
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300"
                   />

@@ -7,7 +7,9 @@
     "start": "node server.js",
     "dev": "npx nodemon server.js",
     "dev:node": "node server.js",
-    "test": "jest"
+    "test": "jest",
+    "reset-db": "node scripts/reset-database.js",
+    "fix-indexes": "node scripts/fix-duplicate-indexes.js"
   },
   "keywords": [
     "thesis",
@@ -19,6 +21,7 @@
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {
+    "@supabase/supabase-js": "^2.81.0",
     "bcryptjs": "^2.4.3",
     "compression": "^1.7.4",
     "cors": "^2.8.5",
@@ -33,6 +36,8 @@
     "multer": "^1.4.5-lts.1",
     "mysql2": "^3.6.0",
     "nodemailer": "^6.9.4",
+    "pg": "^8.16.3",
+    "pg-hstore": "^2.3.4",
     "sequelize": "^6.32.1"
   },
   "devDependencies": {

@@ -75,6 +75,7 @@ export const AuthProvider = ({ children }) => {
         try {
           // Try to verify token with backend
           const response = await authAPI.getMe();
+          console.log('Auth check: Backend verification successful');
           dispatch({
             type: 'AUTH_SUCCESS',
             payload: {
@@ -84,16 +85,25 @@ export const AuthProvider = ({ children }) => {
           });
         } catch (error) {
           // If backend verification fails, use cached user data
-          console.log('Backend verification failed, using cached user data');
-          dispatch({
-            type: 'AUTH_SUCCESS',
-            payload: {
-              user: JSON.parse(user),
-              token,
-            },
-          });
+          console.log('Auth check: Backend verification failed, using cached user data', error.message);
+          try {
+            const parsedUser = JSON.parse(user);
+            dispatch({
+              type: 'AUTH_SUCCESS',
+              payload: {
+                user: parsedUser,
+                token,
+              },
+            });
+          } catch (parseError) {
+            console.error('Auth check: Failed to parse user data', parseError);
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            dispatch({ type: 'AUTH_FAILURE', payload: null });
+          }
         }
       } else {
+        console.log('Auth check: No token or user found');
         dispatch({ type: 'AUTH_FAILURE', payload: null });
       }
     };
@@ -104,20 +114,32 @@ export const AuthProvider = ({ children }) => {
   const login = async (credentials) => {
     dispatch({ type: 'AUTH_START' });
     try {
+      console.log('Login attempt:', { email: credentials.email });
       const response = await authAPI.login(credentials);
+      console.log('Login response:', response.data);
+      
       const { user, token } = response.data;
+
+      if (!user || !token) {
+        throw new Error('Invalid response from server');
+      }
 
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
+      
+      // Set flag to prevent immediate redirect by interceptor
+      sessionStorage.setItem('justLoggedIn', 'true');
+      
       dispatch({
         type: 'AUTH_SUCCESS',
         payload: { user, token },
       });
 
-      toast.success(`Welcome back, ${user.firstName}!`);
-      return { success: true };
+      toast.success(`Welcome back, ${user.firstName || user.email}!`);
+      return { success: true, user };
     } catch (error) {
-      const message = error.response?.data?.message || 'Login failed';
+      console.error('Login error:', error);
+      const message = error.response?.data?.message || error.message || 'Login failed';
       dispatch({
         type: 'AUTH_FAILURE',
         payload: message,
@@ -167,6 +189,7 @@ export const AuthProvider = ({ children }) => {
         type: 'UPDATE_USER',
         payload: response.data.user,
       });
+      localStorage.setItem('user', JSON.stringify({ ...state.user, ...response.data.user }));
       toast.success('Profile updated successfully');
       return { success: true };
     } catch (error) {

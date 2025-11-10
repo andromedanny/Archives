@@ -45,7 +45,7 @@ const Department = sequelize.define('Department', {
       }
     }
   },
-  headId: {
+  head_id: {
     type: DataTypes.INTEGER,
     allowNull: true,
     references: {
@@ -58,12 +58,12 @@ const Department = sequelize.define('Department', {
     allowNull: true,
     defaultValue: []
   },
-  contactInfo: {
+  contact_info: {
     type: DataTypes.JSON,
     allowNull: true,
     defaultValue: {}
   },
-  isActive: {
+  is_active: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
   },
@@ -79,9 +79,10 @@ const Department = sequelize.define('Department', {
 }, {
   tableName: 'departments',
   indexes: [
-    { fields: ['name'] },
-    { fields: ['code'] },
-    { fields: ['isActive'] }
+    // Note: name and code already have unique: true, which creates indexes
+    // Only add non-unique indexes here
+    { fields: ['is_active'] },
+    { fields: ['head_id'] }
   ]
 });
 

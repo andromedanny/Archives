@@ -4,10 +4,10 @@ import { Helmet } from 'react-helmet-async';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import Header from '../../components/Layout/Header';
-import Footer from '../../components/Layout/Footer';
 import BackgroundImage from '../../components/UI/BackgroundImage';
 import LoadingSpinner from '../../components/UI/LoadingSpinner';
-import apiService from '../../services/apiService';
+import { dashboardAPI } from '../../services/api';
+import toast from 'react-hot-toast';
 import { 
   BookOpenIcon, 
   UserGroupIcon, 
@@ -25,19 +25,8 @@ const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   
-  // Mock user for testing when backend auth is not working
-  const mockUser = {
-    id: 1,
-    firstName: 'Admin',
-    lastName: 'User',
-    email: 'admin@faith.edu.ph',
-    role: 'admin',
-    department: 'Computer Science',
-    isActive: true
-  };
-  
-  // Use mock user if real user is not available
-  const currentUser = user || mockUser;
+  // Use real user from context
+  const currentUser = user;
   
   const [dashboardData, setDashboardData] = useState({
     stats: {},
@@ -50,147 +39,73 @@ const Dashboard = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    console.log('Dashboard: Component mounted, fetching data...');
     fetchDashboardData();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Add error boundary effect
+  useEffect(() => {
+    const handleError = (error) => {
+      console.error('Dashboard error:', error);
+      setError('An error occurred. Please refresh the page.');
+    };
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
   }, []);
+
+  useEffect(() => {
+    console.log('Dashboard state:', { isLoading, error, hasData: !!dashboardData.stats });
+  }, [isLoading, error, dashboardData]);
 
   const fetchDashboardData = async () => {
     try {
+      console.log('Dashboard: Starting to fetch data...');
       setIsLoading(true);
       setError(null);
 
-      // For now, use mock data since backend routes are not working
-      // TODO: Replace with real API calls when backend is fixed
-      const mockStats = {
-        totalTheses: 150,
-        totalUsers: 45,
-        totalDepartments: 3,
-        recentSubmissions: 12,
-        myTheses: 5,
-        publishedTheses: 3,
-        totalViews: 1250,
-        totalDownloads: 89,
-        pendingReviews: 8
-      };
-
-      const mockActivity = [
-        {
-          type: 'thesis',
-          title: 'New thesis submitted: "Machine Learning Applications in Healthcare"',
-          date: new Date().toISOString(),
-          author: 'John Doe'
-        },
-        {
-          type: 'user',
-          title: 'New user registered: Jane Smith',
-          date: new Date(Date.now() - 3600000).toISOString(),
-          role: 'student'
-        },
-        {
-          type: 'thesis',
-          title: 'Thesis "Web Development Best Practices" status: Published',
-          date: new Date(Date.now() - 7200000).toISOString(),
-          status: 'Published'
-        }
-      ];
-
-      const mockTheses = [
-        {
-          id: 1,
-          title: 'Machine Learning Applications in Healthcare',
-          status: 'Published',
-          submittedAt: new Date().toISOString(),
-          viewCount: 45,
-          downloadCount: 12
-        },
-        {
-          id: 2,
-          title: 'Web Development Best Practices',
-          status: 'Under Review',
-          submittedAt: new Date(Date.now() - 86400000).toISOString(),
-          viewCount: 23,
-          downloadCount: 5
-        },
-        {
-          id: 3,
-          title: 'Database Optimization Techniques',
-          status: 'Draft',
-          submittedAt: new Date(Date.now() - 172800000).toISOString(),
-          viewCount: 8,
-          downloadCount: 2
-        }
-      ];
-
-      const mockEvents = [
-        {
-          id: 1,
-          title: 'Thesis Defense - Machine Learning Research',
-          eventDate: new Date(Date.now() + 86400000).toISOString(),
-          eventType: 'thesis_defense',
-          location: 'Room 101'
-        },
-        {
-          id: 2,
-          title: 'Department Meeting',
-          eventDate: new Date(Date.now() + 172800000).toISOString(),
-          eventType: 'meeting',
-          location: 'Conference Room A'
-        },
-        {
-          id: 3,
-          title: 'Title Defense - Web Development',
-          eventDate: new Date(Date.now() + 259200000).toISOString(),
-          eventType: 'title_defense',
-          location: 'Room 205'
-        }
-      ];
-
-      const mockDeptStats = {
-        department: {
-          name: 'Computer Science',
-          code: 'CS',
-          description: 'Computer Science Department'
-        },
-        thesisCount: 45,
-        userCount: 120,
-        recentSubmissions: 8
-      };
-
-      setDashboardData({
-        stats: mockStats,
-        recentActivity: mockActivity,
-        myTheses: mockTheses,
-        upcomingEvents: mockEvents,
-        departmentStats: mockDeptStats
-      });
-
-      // Uncomment below when backend is working:
-      /*
-      const [stats, activity, theses, events, deptStats] = await Promise.all([
-        apiService.getDashboardStats(),
-        apiService.getRecentActivity(),
-        apiService.getMyTheses(5),
-        apiService.getUpcomingEvents(5),
-        apiService.getDepartmentStats()
+      // Fetch real data from API
+      const [statsResponse, activityResponse, thesesResponse, eventsResponse] = await Promise.all([
+        dashboardAPI.getStats().catch(() => ({ data: { success: false } })),
+        dashboardAPI.getActivity().catch(() => ({ data: { success: false, data: [] } })),
+        dashboardAPI.getMyTheses(5).catch(() => ({ data: { success: false, data: [] } })),
+        dashboardAPI.getUpcomingEvents(5).catch(() => ({ data: { success: false, data: [] } }))
       ]);
+
+      const stats = statsResponse.data.success ? statsResponse.data.data : {};
+      const activity = activityResponse.data.success ? (activityResponse.data.data || []) : [];
+      const theses = thesesResponse.data.success ? (thesesResponse.data.data || []) : [];
+      const events = eventsResponse.data.success ? (eventsResponse.data.data || []) : [];
 
       setDashboardData({
         stats,
         recentActivity: activity,
         myTheses: theses,
         upcomingEvents: events,
-        departmentStats: deptStats
+        departmentStats: {}
       });
-      */
+      console.log('Dashboard: Data loaded successfully');
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       setError('Failed to load dashboard data');
+      // Set empty data on error
+      setDashboardData({
+        stats: {},
+        recentActivity: [],
+        myTheses: [],
+        upcomingEvents: [],
+        departmentStats: {}
+      });
+      if (err.response?.status !== 401) {
+        toast.error('Failed to load dashboard data');
+      }
     } finally {
+      console.log('Dashboard: Setting isLoading to false');
       setIsLoading(false);
     }
   };
 
   const getRoleBasedStats = () => {
-    const baseStats = dashboardData.stats;
+    const baseStats = dashboardData.stats || {};
     
     if (currentUser?.role === 'admin') {
       return [
@@ -230,28 +145,28 @@ const Dashboard = () => {
           value: baseStats.myTheses || 0,
           icon: DocumentTextIcon,
           color: 'blue',
-          link: '/thesis/my-theses'
+          link: '/my-theses'
         },
         {
           title: 'Published',
           value: baseStats.publishedTheses || 0,
           icon: BookOpenIcon,
           color: 'green',
-          link: '/thesis/my-theses?status=published'
+          link: '/my-theses?status=published'
         },
         {
           title: 'Total Views',
           value: baseStats.totalViews || 0,
           icon: EyeIcon,
           color: 'purple',
-          link: '/thesis/my-theses'
+          link: '/my-theses'
         },
         {
           title: 'Downloads',
           value: baseStats.totalDownloads || 0,
           icon: ArrowDownTrayIcon,
           color: 'orange',
-          link: '/thesis/my-theses'
+          link: '/my-theses'
         }
       ];
     }
@@ -303,7 +218,7 @@ const Dashboard = () => {
           description: 'View and manage your submitted theses',
           icon: DocumentTextIcon,
           color: 'green',
-          link: '/thesis/my-theses'
+          link: '/my-theses'
         },
         {
           title: 'Calendar',
@@ -324,26 +239,74 @@ const Dashboard = () => {
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'N/A';
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch (error) {
+      return 'N/A';
+    }
   };
 
   const formatTimeAgo = (dateString) => {
-    const now = new Date();
-    const date = new Date(dateString);
-    const diffInHours = Math.floor((now - date) / (1000 * 60 * 60));
-    
-    if (diffInHours < 1) return 'Just now';
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    const diffInDays = Math.floor(diffInHours / 24);
-    if (diffInDays < 7) return `${diffInDays}d ago`;
-    return formatDate(dateString);
+    if (!dateString) return 'Never';
+    try {
+      const now = new Date();
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Never';
+      const diffInHours = Math.floor((now - date) / (1000 * 60 * 60));
+      
+      if (diffInHours < 1) return 'Just now';
+      if (diffInHours < 24) return `${diffInHours}h ago`;
+      const diffInDays = Math.floor(diffInHours / 24);
+      if (diffInDays < 7) return `${diffInDays}d ago`;
+      return formatDate(dateString);
+    } catch (error) {
+      return 'Never';
+    }
+  };
+
+  const getColorStyles = (color) => {
+    const colors = {
+      blue: {
+        text: '#2563eb',
+        bgLight: '#dbeafe',
+        bgMedium: '#bfdbfe',
+        bgDark: '#93c5fd',
+        border: '#bfdbfe'
+      },
+      green: {
+        text: '#16a34a',
+        bgLight: '#dcfce7',
+        bgMedium: '#bbf7d0',
+        bgDark: '#86efac',
+        border: '#bbf7d0'
+      },
+      purple: {
+        text: '#9333ea',
+        bgLight: '#f3e8ff',
+        bgMedium: '#e9d5ff',
+        bgDark: '#d8b4fe',
+        border: '#e9d5ff'
+      },
+      orange: {
+        text: '#ea580c',
+        bgLight: '#ffedd5',
+        bgMedium: '#fed7aa',
+        bgDark: '#fdba74',
+        border: '#fed7aa'
+      }
+    };
+    return colors[color] || colors.blue;
   };
 
   if (isLoading) {
+    console.log('Dashboard: Showing loading state');
     return (
       <>
         <BackgroundImage />
@@ -351,7 +314,6 @@ const Dashboard = () => {
         <div className="min-h-screen flex items-center justify-center pt-16">
           <LoadingSpinner />
         </div>
-        <Footer />
       </>
     );
   }
@@ -372,11 +334,16 @@ const Dashboard = () => {
             </button>
           </div>
         </div>
-        <Footer />
       </>
     );
   }
 
+  console.log('Dashboard: Rendering main content', { 
+    currentUser, 
+    dashboardData: Object.keys(dashboardData),
+    statsCount: Object.keys(dashboardData.stats || {}).length 
+  });
+  
   return (
     <>
       <Helmet>
@@ -387,34 +354,32 @@ const Dashboard = () => {
       <BackgroundImage />
       <Header />
       
-      <main className="min-h-screen pt-16 pb-20">
+      <main className="min-h-screen pt-16 pb-96" style={{ position: 'relative', zIndex: 1 }}>
         <div className="w-11/12 max-w-7xl mx-auto mt-8">
           {/* Welcome Header */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="mb-8"
+            className="mb-8 bg-gradient-to-r from-blue-600 to-blue-800 rounded-2xl shadow-2xl p-8 text-white"
           >
             <div className="flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="flex items-center gap-4">
-                <img 
-                  src="/faith logo.png" 
-                  alt="FAITH Colleges Logo" 
-                  className="h-16 w-auto"
-                />
+                <div className="bg-white/20 backdrop-blur-sm p-4 rounded-xl">
+                  <img 
+                    src="/faith logo.png" 
+                    alt="FAITH Colleges Logo" 
+                    className="h-16 w-auto"
+                  />
+                </div>
                 <div>
-                  <h1 className="text-3xl md:text-4xl font-bold text-gray-800">
+                  <h1 className="text-3xl md:text-4xl font-bold text-white">
                     Welcome back, {currentUser?.firstName || 'User'}!
                   </h1>
-                  <p className="text-lg text-gray-600">
+                  <p className="text-lg text-blue-100">
                     {currentUser?.role === 'admin' ? 'Administrative Dashboard' : 'Student Dashboard'}
                   </p>
                 </div>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-gray-500">Last login: {formatTimeAgo(currentUser?.lastLogin)}</p>
-                <p className="text-sm text-gray-500">Department: {currentUser?.department}</p>
               </div>
             </div>
           </motion.div>
@@ -432,45 +397,57 @@ const Dashboard = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 + (index * 0.1) }}
-                className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group"
+                className="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl border border-gray-100 hover:border-blue-200 transition-all duration-300 cursor-pointer group transform hover:-translate-y-1"
                 onClick={() => navigate(stat.link)}
               >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600 mb-1">{stat.title}</p>
-                    <p className={`text-3xl font-bold text-${stat.color}-600`}>{stat.value}</p>
+                    <p style={{ color: getColorStyles(stat.color).text }} className="text-3xl font-bold">{stat.value}</p>
                   </div>
-                  <div className={`p-3 rounded-lg bg-${stat.color}-100 group-hover:bg-${stat.color}-200 transition-colors`}>
-                    <stat.icon className={`h-6 w-6 text-${stat.color}-600`} />
+                  <div 
+                    className="p-3 rounded-xl transition-all duration-300 transform group-hover:scale-110"
+                    style={{
+                      background: `linear-gradient(to bottom right, ${getColorStyles(stat.color).bgLight}, ${getColorStyles(stat.color).bgMedium})`
+                    }}
+                  >
+                    <stat.icon style={{ color: getColorStyles(stat.color).text }} className="h-6 w-6" />
                   </div>
                 </div>
               </motion.div>
             ))}
           </motion.div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {/* Quick Actions */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="lg:col-span-2"
             >
-              <div className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg">
-                <h2 className="text-2xl font-bold text-gray-800 mb-6">Quick Actions</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 h-full">
+                <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                  <div className="w-1 h-8 bg-gradient-to-b from-blue-600 to-blue-400 rounded-full"></div>
+                  Quick Actions
+                </h2>
+                <div className="space-y-4">
                   {getQuickActions().map((action, index) => (
                     <motion.div
                       key={action.title}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.3, delay: 0.2 + (index * 0.1) }}
-                      className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-all duration-300 cursor-pointer group"
+                      className="p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-lg transition-all duration-300 cursor-pointer group bg-gradient-to-br from-white to-gray-50 hover:from-blue-50 hover:to-white transform hover:-translate-y-1"
                       onClick={() => navigate(action.link)}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg bg-${action.color}-100 group-hover:bg-${action.color}-200 transition-colors`}>
-                          <action.icon className={`h-5 w-5 text-${action.color}-600`} />
+                        <div 
+                          className="p-2 rounded-xl transition-all duration-300 transform group-hover:rotate-6"
+                          style={{
+                            background: `linear-gradient(to bottom right, ${getColorStyles(action.color).bgLight}, ${getColorStyles(action.color).bgMedium})`
+                          }}
+                        >
+                          <action.icon style={{ color: getColorStyles(action.color).text }} className="h-5 w-5" />
                         </div>
                         <div>
                           <h3 className="font-semibold text-gray-800">{action.title}</h3>
@@ -488,19 +465,20 @@ const Dashboard = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className="space-y-6"
             >
-              {/* Recent Activity */}
-              <div className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg">
-                <h2 className="text-xl font-bold text-gray-800 mb-4">Recent Activity</h2>
+              <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 h-full">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-1 h-6 bg-gradient-to-b from-purple-600 to-purple-400 rounded-full"></div>
+                  Recent Activity
+                </h2>
                 <div className="space-y-3">
-                  {dashboardData.recentActivity.slice(0, 5).map((activity, index) => (
+                  {dashboardData.recentActivity && dashboardData.recentActivity.slice(0, 5).map((activity, index) => (
                     <motion.div
                       key={index}
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.3, delay: 0.3 + (index * 0.1) }}
-                      className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
+                      className="flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300"
                     >
                       <div className={`p-1 rounded-full bg-${activity.type === 'thesis' ? 'blue' : 'green'}-100`}>
                         <DocumentTextIcon className={`h-4 w-4 text-${activity.type === 'thesis' ? 'blue' : 'green'}-600`} />
@@ -511,44 +489,98 @@ const Dashboard = () => {
                       </div>
                     </motion.div>
                   ))}
-                  {dashboardData.recentActivity.length === 0 && (
+                  {(!dashboardData.recentActivity || dashboardData.recentActivity.length === 0) && (
                     <p className="text-gray-500 text-center py-4">No recent activity</p>
                   )}
                 </div>
               </div>
+            </motion.div>
 
-              {/* Upcoming Events */}
-              <div className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg">
-                <h2 className="text-xl font-bold text-gray-800 mb-4">Upcoming Events</h2>
+            {/* My Theses */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+            >
+              <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 h-full">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <div className="w-1 h-6 bg-gradient-to-b from-green-600 to-green-400 rounded-full"></div>
+                    My Theses
+                  </h2>
+                  <button
+                    onClick={() => navigate('/my-theses')}
+                    className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    View All
+                  </button>
+                </div>
                 <div className="space-y-3">
-                  {dashboardData.upcomingEvents.slice(0, 3).map((event, index) => (
+                  {dashboardData.myTheses && dashboardData.myTheses.slice(0, 5).map((thesis, index) => (
                     <motion.div
-                      key={index}
+                      key={thesis.id}
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.3, delay: 0.4 + (index * 0.1) }}
-                      className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
+                      className="p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300 cursor-pointer"
+                      onClick={() => navigate(`/thesis/${thesis.id}`)}
                     >
-                      <div className="p-1 rounded-full bg-purple-100">
-                        <CalendarIcon className="h-4 w-4 text-purple-600" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-800">{event.title}</p>
-                        <p className="text-xs text-gray-500">{formatDate(event.date)}</p>
+                      <p className="text-sm font-medium text-gray-800 mb-1 line-clamp-2">{thesis.title}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium bg-${thesis.status === 'Published' ? 'green' : thesis.status === 'Under Review' ? 'yellow' : 'gray'}-100 text-${thesis.status === 'Published' ? 'green' : thesis.status === 'Under Review' ? 'yellow' : 'gray'}-800`}>
+                          {thesis.status}
+                        </span>
+                        <span className="text-xs text-gray-500">{formatTimeAgo(thesis.submittedAt)}</span>
                       </div>
                     </motion.div>
                   ))}
-                  {dashboardData.upcomingEvents.length === 0 && (
-                    <p className="text-gray-500 text-center py-4">No upcoming events</p>
+                  {(!dashboardData.myTheses || dashboardData.myTheses.length === 0) && (
+                    <p className="text-gray-500 text-center py-4">No theses yet</p>
                   )}
                 </div>
               </div>
             </motion.div>
           </div>
+
+          {/* Upcoming Events - Separate row */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.5 }}
+            className="mt-8 pb-32"
+          >
+            <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <div className="w-1 h-6 bg-gradient-to-b from-green-600 to-green-400 rounded-full"></div>
+                Upcoming Events
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {dashboardData.upcomingEvents && dashboardData.upcomingEvents.slice(0, 3).map((event, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: 0.5 + (index * 0.1) }}
+                    className="flex items-start gap-3 p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300"
+                  >
+                    <div className="p-1 rounded-full bg-purple-100">
+                      <CalendarIcon className="h-4 w-4 text-purple-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-800">{event.title}</p>
+                      <p className="text-xs text-gray-500">{formatDate(event.eventDate || event.date)}</p>
+                    </div>
+                  </motion.div>
+                ))}
+                {(!dashboardData.upcomingEvents || dashboardData.upcomingEvents.length === 0) && (
+                  <p className="text-gray-500 text-center py-4 col-span-3">No upcoming events</p>
+                )}
+              </div>
+            </div>
+          </motion.div>
         </div>
       </main>
       
-      <Footer />
     </>
   );
 };

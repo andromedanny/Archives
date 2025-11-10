@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import Header from '../../components/Layout/Header';
 import Footer from '../../components/Layout/Footer';
 import BackgroundImage from '../../components/UI/BackgroundImage';
+import { thesisAPI, departmentsAPI, coursesAPI, adminAPI } from '../../services/api';
+import toast from 'react-hot-toast';
+import { formatCourseCode, formatAcademicYear } from '../../utils/formatters';
 import { 
   PencilIcon, 
   TrashIcon, 
@@ -21,93 +24,114 @@ const AdminTheses = () => {
   const [editingThesis, setEditingThesis] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [departments, setDepartments] = useState([]);
+  const [courses, setCourses] = useState([]);
   const [formData, setFormData] = useState({
     title: '',
     abstract: '',
     authors: '',
-    course: '',
-    year: '',
     department: '',
+    program: '',
+    academicYear: '',
+    semester: '1st Semester',
+    category: 'Undergraduate',
     status: 'draft',
     isPublic: true
   });
 
-  useEffect(() => {
-    // Mock data - replace with actual API call
-    const mockTheses = [
-      {
-        id: 1,
-        title: "Machine Learning Applications in Healthcare",
-        abstract: "This thesis explores the application of machine learning algorithms in healthcare systems...",
-        authors: "John Doe, Jane Smith",
-        course: "BSCS",
-        year: "2023",
-        department: "Computer Science",
-        submissionDate: "2023-05-15",
-        status: "published",
-        isPublic: true,
-        viewCount: 45,
-        downloadCount: 12
-      },
-      {
-        id: 2,
-        title: "Web Development Best Practices",
-        abstract: "A comprehensive study on modern web development practices and frameworks...",
-        authors: "Alice Johnson",
-        course: "BSIT",
-        year: "2023",
-        department: "Information Technology",
-        submissionDate: "2023-06-20",
-        status: "under_review",
-        isPublic: false,
-        viewCount: 23,
-        downloadCount: 5
-      },
-      {
-        id: 3,
-        title: "Database Optimization Techniques",
-        abstract: "Research on advanced database optimization methods for large-scale applications...",
-        authors: "Bob Wilson, Carol Davis",
-        course: "BSCS",
-        year: "2023",
-        department: "Computer Science",
-        submissionDate: "2023-07-10",
-        status: "draft",
-        isPublic: false,
-        viewCount: 8,
-        downloadCount: 2
-      },
-      {
-        id: 4,
-        title: "Mobile App Development Trends",
-        abstract: "Analysis of current trends in mobile application development...",
-        authors: "David Brown",
-        course: "BSEMC",
-        year: "2023",
-        department: "Entertainment and Multimedia Computing",
-        submissionDate: "2023-08-05",
-        status: "rejected",
-        isPublic: false,
-        viewCount: 15,
-        downloadCount: 3
-      }
-    ];
-    
-    setTheses(mockTheses);
-    setIsLoading(false);
+  const statusLabelMap = {
+    draft: 'Draft',
+    under_review: 'Under Review',
+    published: 'Published',
+    rejected: 'Rejected',
+    approved: 'Approved'
+  };
+
+  const academicYearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let year = currentYear + 1; year >= 2000; year--) {
+      years.push(`${year}-${year + 1}`);
+    }
+    return years;
   }, []);
+
+  const fetchTheses = async () => {
+    try {
+      setIsLoading(true);
+      // Use admin API to get all theses (including drafts)
+      const response = await adminAPI.getTheses();
+      if (response.data.success) {
+        setTheses(response.data.data || []);
+      } else {
+        setTheses([]);
+      }
+    } catch (error) {
+      console.error('Error fetching theses:', error);
+      setTheses([]);
+      if (error.response?.status !== 401) {
+        toast.error('Failed to load theses');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTheses();
+    fetchDepartmentsAndCourses();
+  }, []);
+
+  const fetchDepartmentsAndCourses = async () => {
+    try {
+      const [deptsResponse, coursesResponse] = await Promise.all([
+        departmentsAPI.getDepartments().catch(() => ({ data: { success: false, data: [] } })),
+        coursesAPI.getCourses().catch(() => ({ data: { success: false, data: [] } }))
+      ]);
+
+      if (deptsResponse.data.success) {
+        setDepartments(deptsResponse.data.data || []);
+      }
+      if (coursesResponse.data.success) {
+        setCourses(coursesResponse.data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching departments/courses:', error);
+    }
+  };
+
+  // Prepare course options (allow admin to pick any course, but prioritize selected department)
+  const activeCourses = courses.filter(course => course.is_active !== false);
+  const filteredCourses = formData.department
+    ? activeCourses.filter(course => {
+        const dept = departments.find(d => d.name === formData.department);
+        return dept && course.department_id === dept.id;
+      })
+    : activeCourses;
+
+  const getCourseLabel = (course) => {
+    const dept = departments.find(d => d.id === course.department_id);
+    return dept ? `${course.code} - ${course.name} (${dept.code || dept.name})` : `${course.code} - ${course.name}`;
+  };
 
   const handleEdit = (thesis) => {
     setEditingThesis(thesis);
+    // Format authors for display (convert array to string)
+    const authorsDisplay = Array.isArray(thesis.authors)
+      ? thesis.authors.map(author => `${author.firstName || ''} ${author.lastName || ''}`.trim()).filter(Boolean).join(', ')
+      : thesis.authors || '';
+    
     setFormData({
       title: thesis.title,
       abstract: thesis.abstract,
-      authors: thesis.authors,
-      course: thesis.course,
-      year: thesis.year,
-      department: thesis.department,
-      status: thesis.status,
-      isPublic: thesis.isPublic
+      authors: authorsDisplay,
+      department: thesis.department || '',
+      program: thesis.program || thesis.course || '',
+      academicYear: thesis.academic_year || thesis.year || '',
+      semester: thesis.semester || '1st Semester',
+      category: thesis.category || 'Undergraduate',
+      status: (thesis.status || 'Draft').toLowerCase().replace(' ', '_'),
+      isPublic: thesis.isPublic ?? thesis.is_public ?? true
     });
     setShowEditModal(true);
   };
@@ -119,60 +143,129 @@ const AdminTheses = () => {
       title: '',
       abstract: '',
       authors: '',
-      course: '',
-      year: '',
       department: '',
+      program: '',
+      academicYear: '',
+      semester: '1st Semester',
+      category: 'Undergraduate',
       status: 'draft',
       isPublic: true
     });
     setShowAddModal(true);
   };
 
-  const handleSave = () => {
-    console.log('Saving thesis:', formData);
-    if (editingThesis) {
-      // Update existing thesis
-      setTheses(theses.map(thesis => 
-        thesis.id === editingThesis.id 
-          ? { ...thesis, ...formData }
-          : thesis
-      ));
-      setShowEditModal(false);
-    } else {
-      // Add new thesis
-      const newThesis = {
-        id: theses.length + 1,
-        ...formData,
-        submissionDate: new Date().toISOString().split('T')[0],
-        viewCount: 0,
-        downloadCount: 0
-      };
-      console.log('Adding new thesis:', newThesis);
-      setTheses([...theses, newThesis]);
-      setShowAddModal(false);
+  const handleSave = async () => {
+    try {
+      if (!formData.department || !formData.program || !formData.academicYear) {
+        toast.error('Please complete the department, course, and academic year fields.');
+        return;
+      }
+
+      const statusForApi = statusLabelMap[formData.status] || 'Draft';
+
+      if (editingThesis) {
+        const { authors, ...rest } = formData;
+        const updatePayload = {
+          title: rest.title,
+          abstract: rest.abstract,
+          department: rest.department,
+          program: rest.program,
+          academicYear: rest.academicYear,
+          semester: rest.semester,
+          category: rest.category,
+          status: statusForApi,
+          isPublic: rest.isPublic
+        };
+
+        await thesisAPI.updateThesis(editingThesis.id, updatePayload);
+        toast.success('Thesis updated successfully');
+        setShowEditModal(false);
+        fetchTheses();
+      } else {
+        const createPayload = {
+          title: formData.title.trim(),
+          abstract: formData.abstract.trim(),
+          department: formData.department,
+          program: formData.program,
+          academicYear: formData.academicYear,
+          semester: formData.semester,
+          category: formData.category,
+          keywords: []
+        };
+
+        const response = await thesisAPI.createThesis(createPayload);
+
+        if (response.data?.success) {
+          const createdThesis = response.data.data;
+          const requiresFollowUp =
+            formData.status !== 'draft' || formData.isPublic !== true;
+
+          if (requiresFollowUp) {
+            await thesisAPI.updateThesis(createdThesis.id, {
+              status: statusForApi,
+              isPublic: formData.isPublic
+            });
+          }
+
+          toast.success('Thesis created successfully');
+          setShowAddModal(false);
+          fetchTheses();
+        } else {
+          throw new Error(response.data?.message || 'Failed to create thesis');
+        }
+      }
+
+      setFormData({
+        title: '',
+        abstract: '',
+        authors: '',
+        department: '',
+        program: '',
+        academicYear: '',
+        semester: '1st Semester',
+        category: 'Undergraduate',
+        status: 'draft',
+        isPublic: true
+      });
+      setEditingThesis(null);
+    } catch (error) {
+      console.error('Error saving thesis:', error);
+      toast.error(error.response?.data?.message || 'Failed to save thesis');
     }
-    setEditingThesis(null);
   };
 
-  const handleApprove = (thesisId) => {
-    setTheses(theses.map(thesis => 
-      thesis.id === thesisId 
-        ? { ...thesis, status: 'published', isPublic: true }
-        : thesis
-    ));
+  const handleApprove = async (thesisId) => {
+    try {
+      await thesisAPI.updateThesis(thesisId, { status: 'Published', isPublic: true });
+      toast.success('Thesis approved and published');
+      fetchTheses();
+    } catch (error) {
+      console.error('Error approving thesis:', error);
+      toast.error(error.response?.data?.message || 'Failed to approve thesis');
+    }
   };
 
-  const handleReject = (thesisId) => {
-    setTheses(theses.map(thesis => 
-      thesis.id === thesisId 
-        ? { ...thesis, status: 'rejected' }
-        : thesis
-    ));
+  const handleReject = async (thesisId) => {
+    try {
+      await thesisAPI.updateThesis(thesisId, { status: 'Rejected' });
+      toast.success('Thesis rejected');
+      fetchTheses();
+    } catch (error) {
+      console.error('Error rejecting thesis:', error);
+      toast.error(error.response?.data?.message || 'Failed to reject thesis');
+    }
   };
 
-  const handleDelete = (thesisId) => {
+  const handleDelete = async (thesisId) => {
     if (window.confirm('Are you sure you want to delete this thesis?')) {
-      setTheses(theses.filter(thesis => thesis.id !== thesisId));
+      try {
+        await thesisAPI.deleteThesis(thesisId);
+        toast.success('Thesis deleted successfully');
+        fetchTheses();
+      } catch (error) {
+        console.error('Error deleting thesis:', error);
+        toast.error(error.response?.data?.message || 'Failed to delete thesis');
+      }
     }
   };
 
@@ -185,9 +278,13 @@ const AdminTheses = () => {
   };
 
   const filteredTheses = theses.filter(thesis => {
-    const matchesSearch = thesis.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         thesis.authors.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || thesis.status === filterStatus;
+    const title = (thesis.title || '').toLowerCase();
+    const authorsString = Array.isArray(thesis.authors)
+      ? thesis.authors.map(author => `${author.firstName || ''} ${author.lastName || ''}`.trim()).join(' ').toLowerCase()
+      : (thesis.authors || '').toLowerCase();
+    const matchesSearch = title.includes(searchTerm.toLowerCase()) || authorsString.includes(searchTerm.toLowerCase());
+    const thesisStatus = (thesis.status || '').toLowerCase();
+    const matchesStatus = filterStatus === 'all' || thesisStatus === filterStatus || thesisStatus.replace(' ', '_') === filterStatus;
     return matchesSearch && matchesStatus;
   });
 
@@ -202,19 +299,19 @@ const AdminTheses = () => {
       <BackgroundImage />
       <Header />
       
-      <main className="min-h-screen pt-16 pb-20">
-        <div className="w-11/12 max-w-6xl mx-auto mt-8">
+      <main className="min-h-screen pt-16 pb-20" style={{ position: 'relative', zIndex: 1 }}>
+        <div className="w-11/12 max-w-7xl mx-auto mt-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg"
+            className="bg-white p-6 rounded-xl shadow-lg border border-gray-100"
           >
             <div className="flex justify-between items-center mb-6">
               <h1 className="text-3xl font-bold text-gray-800">Manage Theses</h1>
               <button 
                 onClick={handleAddNew}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
               >
                 Add New Thesis
               </button>
@@ -242,6 +339,7 @@ const AdminTheses = () => {
                   <option value="all">All Status</option>
                   <option value="draft">Draft</option>
                   <option value="under_review">Under Review</option>
+                  <option value="approved">Approved</option>
                   <option value="published">Published</option>
                   <option value="rejected">Rejected</option>
                 </select>
@@ -253,11 +351,19 @@ const AdminTheses = () => {
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
                 <p className="mt-4 text-gray-600">Loading theses...</p>
               </div>
+            ) : filteredTheses.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-500 text-lg">
+                  {searchTerm || filterStatus !== 'all' 
+                    ? 'No theses match your search criteria' 
+                    : 'No theses found'}
+                </p>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
                   <thead>
-                    <tr className="bg-gray-50">
+                    <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Title</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Authors</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Course</th>
@@ -270,78 +376,85 @@ const AdminTheses = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredTheses.map((thesis) => (
-                      <motion.tr
-                        key={thesis.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className="hover:bg-gray-50 transition-colors"
-                      >
-                        <td className="px-4 py-3 text-sm text-gray-900 border-b font-medium">
-                          {thesis.title}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 border-b">{thesis.authors}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600 border-b">{thesis.course}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600 border-b">{thesis.year}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600 border-b">{thesis.department}</td>
-                        <td className="px-4 py-3 text-sm border-b">
-                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                            thesis.status === 'published' 
-                              ? 'bg-green-100 text-green-800' 
-                              : thesis.status === 'under_review'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : thesis.status === 'draft'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {thesis.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 border-b text-center">
-                          {thesis.viewCount}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 border-b text-center">
-                          {thesis.downloadCount}
-                        </td>
-                        <td className="px-4 py-3 text-sm border-b">
-                          <div className="flex gap-2 flex-wrap">
-                            <button
-                              onClick={() => handleEdit(thesis)}
-                              className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                            >
-                              <PencilIcon className="h-4 w-4" />
-                              Edit
-                            </button>
-                            {thesis.status === 'under_review' && (
-                              <>
-                                <button
-                                  onClick={() => handleApprove(thesis.id)}
-                                  className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                                >
-                                  <CheckIcon className="h-4 w-4" />
-                                  Approve
-                                </button>
-                                <button
-                                  onClick={() => handleReject(thesis.id)}
-                                  className="flex items-center gap-1 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                                >
-                                  <XMarkIcon className="h-4 w-4" />
-                                  Reject
-                                </button>
-                              </>
-                            )}
-                            <button
-                              onClick={() => handleDelete(thesis.id)}
-                              className="flex items-center gap-1 px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-                            >
-                              <TrashIcon className="h-4 w-4" />
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </motion.tr>
-                    ))}
+                    {filteredTheses.map((thesis) => {
+                      const thesisStatus = (thesis.status || '').toLowerCase().replace(' ', '_');
+                      return (
+                        <motion.tr
+                          key={thesis.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="hover:bg-gray-50 transition-colors"
+                        >
+                          <td className="px-4 py-3 text-sm text-gray-900 border-b font-medium">
+                            {thesis.title}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600 border-b">
+                            {Array.isArray(thesis.authors)
+                              ? thesis.authors.map(author => `${author.firstName || ''} ${author.lastName || ''}`.trim()).filter(Boolean).join(', ')
+                              : thesis.authors}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600 border-b">{formatCourseCode(thesis.course || thesis.program)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600 border-b">{formatAcademicYear(thesis.year || thesis.academic_year)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600 border-b">{thesis.department}</td>
+                          <td className="px-4 py-3 text-sm border-b">
+                            <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                              thesisStatus === 'published'
+                                ? 'bg-green-100 text-green-800'
+                                : thesisStatus === 'under_review'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : thesisStatus === 'draft'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {(thesis.status || '').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600 border-b text-center">
+                            {thesis.viewCount}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600 border-b text-center">
+                            {thesis.downloadCount}
+                          </td>
+                          <td className="px-4 py-3 text-sm border-b">
+                            <div className="flex gap-2 flex-wrap">
+                              <button
+                                onClick={() => handleEdit(thesis)}
+                                className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                              >
+                                <PencilIcon className="h-4 w-4" />
+                                Edit
+                              </button>
+                              {thesisStatus === 'under_review' && (
+                                <>
+                                  <button
+                                    onClick={() => handleApprove(thesis.id)}
+                                    className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                                  >
+                                    <CheckIcon className="h-4 w-4" />
+                                    Approve
+                                  </button>
+                                  <button
+                                    onClick={() => handleReject(thesis.id)}
+                                    className="flex items-center gap-1 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                                  >
+                                    <XMarkIcon className="h-4 w-4" />
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                onClick={() => handleDelete(thesis.id)}
+                                className="flex items-center gap-1 px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </motion.tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -426,34 +539,41 @@ const AdminTheses = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Authors *
+                      Authors {editingThesis ? '(Read-only)' : '*'}
                     </label>
                     <input
                       type="text"
                       name="authors"
                       value={formData.authors}
                       onChange={handleInputChange}
-                      required
+                      required={!editingThesis}
+                      disabled={!!editingThesis}
                       placeholder="Separate multiple authors with commas"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-600"
                     />
+                    {editingThesis && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Authors cannot be edited. Only the thesis creator can add co-authors.
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Course *
+                    Course *
                     </label>
                     <select
-                      name="course"
-                      value={formData.course}
+                    name="program"
+                    value={formData.program}
                       onChange={handleInputChange}
                       required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="">Select Course</option>
-                      <option value="BSCS">BSCS - Bachelor of Science in Computer Science</option>
-                      <option value="BSIT">BSIT - Bachelor of Science in Information Technology</option>
-                      <option value="BSEMC">BSEMC - Bachelor of Science in Entertainment and Multimedia Computing</option>
-                      <option value="BSIS">BSIS - Bachelor of Science in Information Systems</option>
+                    <option value="">Select Course</option>
+                    {filteredCourses.map((course) => (
+                      <option key={course.id} value={course.code}>
+                        {getCourseLabel(course)}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -461,17 +581,22 @@ const AdminTheses = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Academic Year *
+                    Academic Year *
                     </label>
-                    <input
-                      type="text"
-                      name="year"
-                      value={formData.year}
-                      onChange={handleInputChange}
-                      required
-                      placeholder="e.g., 2023-2024"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                  <select
+                    name="academicYear"
+                    value={formData.academicYear}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select Academic Year</option>
+                    {academicYearOptions.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -480,20 +605,60 @@ const AdminTheses = () => {
                     <select
                       name="department"
                       value={formData.department}
-                      onChange={handleInputChange}
+                      onChange={(e) => {
+                        handleInputChange(e);
+                      setFormData(prev => ({ ...prev, program: '' })); // Reset course when department changes
+                      }}
                       required
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">Select Department</option>
-                      <option value="Computer Science">Computer Science</option>
-                      <option value="Information Technology">Information Technology</option>
-                      <option value="Entertainment and Multimedia Computing">Entertainment and Multimedia Computing</option>
-                      <option value="Information Systems">Information Systems</option>
+                      {departments.filter(d => d.is_active).map((dept) => (
+                        <option key={dept.id} value={dept.name}>
+                          {dept.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Semester *
+                  </label>
+                  <select
+                    name="semester"
+                    value={formData.semester}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="1st Semester">1st Semester</option>
+                    <option value="2nd Semester">2nd Semester</option>
+                    <option value="Summer">Summer</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Category *
+                  </label>
+                  <select
+                    name="category"
+                    value={formData.category}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Undergraduate">Undergraduate</option>
+                    <option value="Graduate">Graduate</option>
+                    <option value="Doctoral">Doctoral</option>
+                    <option value="Research Paper">Research Paper</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Status *
@@ -507,6 +672,7 @@ const AdminTheses = () => {
                     >
                       <option value="draft">Draft</option>
                       <option value="under_review">Under Review</option>
+                    <option value="approved">Approved</option>
                       <option value="published">Published</option>
                       <option value="rejected">Rejected</option>
                     </select>

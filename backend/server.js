@@ -4,8 +4,8 @@ const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
-const { connectDB } = require('./config/database');
 require('dotenv').config();
+const { connectDB } = require('./config/database');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -14,6 +14,7 @@ const thesisRoutes = require('./routes/thesis');
 const calendarRoutes = require('./routes/calendar');
 const adminRoutes = require('./routes/admin');
 const dashboardRoutes = require('./routes/dashboard');
+const courseRoutes = require('./routes/courses');
 
 const app = express();
 
@@ -21,10 +22,10 @@ const app = express();
 app.use(helmet());
 app.use(compression());
 
-// Rate limiting
+// Rate limiting - more lenient in development
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Higher limit in development
   message: 'Too many requests from this IP, please try again later.'
 });
 app.use('/api/', limiter);
@@ -39,13 +40,16 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Logging middleware
-if (process.env.NODE_ENV === 'development') {
+// Logging middleware - Use 'combined' for more info, 'dev' for less, or disable entirely
+// Set to 'dev' for minimal output, or false to disable HTTP logging
+if (process.env.NODE_ENV === 'development' && process.env.ENABLE_HTTP_LOGGING === 'true') {
   app.use(morgan('dev'));
 }
 
-// Static files
-app.use('/uploads', express.static('uploads'));
+// Static files - only serve locally, use cloud storage in production
+if (process.env.STORAGE_TYPE === 'local' || !process.env.STORAGE_TYPE) {
+  app.use('/uploads', express.static('uploads'));
+}
 
 // Database connection
 connectDB();
@@ -57,6 +61,7 @@ app.use('/api/thesis', thesisRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/courses', courseRoutes);
 
 // Test dashboard route directly
 app.get('/api/dashboard/test-direct', (req, res) => {

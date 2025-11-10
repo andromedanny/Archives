@@ -1,9 +1,7 @@
 const express = require('express');
 const { body, validationResult, query } = require('express-validator');
-const User = require('../models/User');
-const Thesis = require('../models/Thesis');
-const Calendar = require('../models/Calendar');
-const Department = require('../models/Department');
+const { Op } = require('sequelize');
+const { User, Thesis, Calendar, Department, AuditLog } = require('../models');
 const { protect, authorize } = require('../middleware/auth');
 
 const router = express.Router();
@@ -17,71 +15,136 @@ router.use(authorize('admin'));
 // @access  Private (Admin)
 router.get('/dashboard', async (req, res) => {
   try {
+    const { Op } = require('sequelize');
+    
+    // Get statistics
     const [
-      totalUsers,
-      totalStudents,
-      totalFaculty,
       totalTheses,
-      publishedTheses,
-      pendingTheses,
-      totalEvents,
-      upcomingEvents,
-      departments
+      totalUsers,
+      totalDepartments,
+      recentSubmissions
     ] = await Promise.all([
-      User.countDocuments({ isActive: true }),
-      User.countDocuments({ role: 'student', isActive: true }),
-      User.countDocuments({ role: { $in: ['faculty', 'adviser'] }, isActive: true }),
-      Thesis.countDocuments(),
-      Thesis.countDocuments({ status: 'Published' }),
-      Thesis.countDocuments({ status: { $in: ['Draft', 'Under Review'] } }),
-      Calendar.countDocuments(),
-      Calendar.countDocuments({ 
-        startDate: { $gte: new Date() },
-        status: { $in: ['Scheduled', 'In Progress'] }
-      }),
-      Department.find({ isActive: true }).select('name code statistics')
+      Thesis.count(),
+      User.count({ where: { is_active: true } }),
+      Department.count({ where: { is_active: true } }),
+      Thesis.count({
+        where: {
+          submitted_at: {
+            [Op.gte]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+          }
+        }
+      })
     ]);
 
-    // Get recent activities
-    const recentTheses = await Thesis.find()
-      .populate('authors', 'firstName lastName')
-      .sort({ createdAt: -1 })
-      .limit(5);
+    // Get recent activity
+    const [recentTheses, recentUsers] = await Promise.all([
+      Thesis.findAll({
+        where: {
+          submitted_at: {
+            [Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          }
+        },
+        include: [{
+          model: User,
+          as: 'adviser',
+          attributes: ['firstName', 'lastName']
+        }],
+        order: [['submitted_at', 'DESC']],
+        limit: 10
+      }),
+      User.findAll({
+        where: {
+          createdAt: {
+            [Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          }
+        },
+        order: [['createdAt', 'DESC']],
+        limit: 5
+      })
+    ]);
 
-    const recentUsers = await User.find({ isActive: true })
-      .select('firstName lastName email role department createdAt')
-      .sort({ createdAt: -1 })
-      .limit(5);
+    const recentActivity = [
+      ...recentTheses.map(thesis => ({
+        id: thesis.id,
+        type: 'thesis',
+        title: `New thesis submitted: "${thesis.title}"`,
+        date: thesis.submitted_at || thesis.createdAt,
+        author: thesis.adviser ? `${thesis.adviser.firstName} ${thesis.adviser.lastName}` : 'Unknown'
+      })),
+      ...recentUsers.map(user => ({
+        id: user.id,
+        type: 'user',
+        title: `New user registered: ${user.firstName} ${user.lastName}`,
+        date: user.createdAt,
+        role: user.role
+      }))
+    ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
 
-    const upcomingCalendarEvents = await Calendar.find({
-      startDate: { $gte: new Date() },
-      status: { $in: ['Scheduled', 'In Progress'] }
-    })
-    .populate('createdBy', 'firstName lastName')
-    .sort({ startDate: 1 })
-    .limit(5);
+    // Get recent theses
+    const recentThesesList = await Thesis.findAll({
+      include: [{
+        model: User,
+        as: 'adviser',
+        attributes: ['firstName', 'lastName']
+      }],
+      order: [['submitted_at', 'DESC']],
+      limit: 5,
+      attributes: ['id', 'title', 'status', 'submitted_at', 'view_count', 'download_count']
+    });
+
+    // Get upcoming events
+    const upcomingEvents = await Calendar.findAll({
+      where: {
+        event_date: {
+          [Op.gte]: new Date()
+        }
+      },
+      order: [['event_date', 'ASC']],
+      limit: 3
+    });
+
+    // Get pending reviews
+    const pendingReviews = await Thesis.findAll({
+      where: { status: 'Under Review' },
+      include: [{
+        model: User,
+        as: 'adviser',
+        attributes: ['firstName', 'lastName']
+      }],
+      order: [['submitted_at', 'DESC']],
+      limit: 3,
+      attributes: ['id', 'title', 'status', 'submitted_at']
+    });
 
     res.json({
       success: true,
-      data: {
-        statistics: {
-          totalUsers,
-          totalStudents,
-          totalFaculty,
-          totalTheses,
-          publishedTheses,
-          pendingTheses,
-          totalEvents,
-          upcomingEvents,
-          departments: departments.length
-        },
-        departments,
-        recentActivities: {
-          theses: recentTheses,
-          users: recentUsers,
-          events: upcomingCalendarEvents
-        }
-      }
+      stats: {
+        totalTheses,
+        totalUsers,
+        totalDepartments,
+        recentSubmissions
+      },
+      recentActivity,
+      recentTheses: recentThesesList.map(t => ({
+        id: t.id,
+        title: t.title,
+        author: t.adviser ? `${t.adviser.firstName} ${t.adviser.lastName}` : 'Unknown',
+        status: t.status,
+        submittedAt: t.submitted_at || t.createdAt
+      })),
+      upcomingEvents: upcomingEvents.map(e => ({
+        id: e.id,
+        title: e.title,
+        date: e.event_date,
+        eventDate: e.event_date,
+        location: e.location
+      })),
+      pendingReviews: pendingReviews.map(t => ({
+        id: t.id,
+        title: t.title,
+        author: t.adviser ? `${t.adviser.firstName} ${t.adviser.lastName}` : 'Unknown',
+        submittedAt: t.submitted_at || t.createdAt
+      }))
     });
   } catch (error) {
     console.error('Get dashboard stats error:', error);
@@ -180,18 +243,32 @@ router.get('/analytics', [
     ]);
 
     // Most downloaded theses
-    const topDownloads = await Thesis.find({ status: 'Published' })
-      .populate('authors', 'firstName lastName')
-      .sort({ downloadCount: -1 })
-      .limit(10)
-      .select('title authors downloadCount viewCount');
+    const topDownloads = await Thesis.findAll({
+      where: { status: 'Published' },
+      include: [{
+        model: User,
+        as: 'authors',
+        attributes: ['firstName', 'lastName'],
+        through: { attributes: [] }
+      }],
+      order: [['download_count', 'DESC']],
+      limit: 10,
+      attributes: ['id', 'title', 'download_count', 'view_count']
+    });
 
     // Most viewed theses
-    const topViews = await Thesis.find({ status: 'Published' })
-      .populate('authors', 'firstName lastName')
-      .sort({ viewCount: -1 })
-      .limit(10)
-      .select('title authors downloadCount viewCount');
+    const topViews = await Thesis.findAll({
+      where: { status: 'Published' },
+      include: [{
+        model: User,
+        as: 'authors',
+        attributes: ['firstName', 'lastName'],
+        through: { attributes: [] }
+      }],
+      order: [['view_count', 'DESC']],
+      limit: 10,
+      attributes: ['id', 'title', 'download_count', 'view_count']
+    });
 
     res.json({
       success: true,
@@ -279,6 +356,73 @@ router.put('/thesis/:id/review', [
   }
 });
 
+// @desc    Get all theses (admin only - includes all statuses)
+// @route   GET /api/admin/thesis
+// @access  Private (Admin)
+router.get('/thesis', [
+  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
+  query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('Limit must be between 1 and 50'),
+  query('status').optional().isIn(['Draft', 'Under Review', 'Approved', 'Published', 'Rejected'])
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { Op } = require('sequelize');
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    const where = {};
+    if (req.query.status) {
+      where.status = req.query.status;
+    }
+
+    const { count, rows: theses } = await Thesis.findAndCountAll({
+      where,
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+          through: { attributes: [] }
+        },
+        {
+          model: User,
+          as: 'adviser',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+          required: false
+        }
+      ],
+      order: [['submitted_at', 'DESC']],
+      limit,
+      offset,
+      distinct: true
+    });
+
+    res.json({
+      success: true,
+      count: theses.length,
+      total: count,
+      page,
+      pages: Math.ceil(count / limit),
+      data: theses
+    });
+  } catch (error) {
+    console.error('Get admin theses error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
 // @desc    Get pending theses for review
 // @route   GET /api/admin/thesis/pending
 // @access  Private (Admin)
@@ -296,25 +440,39 @@ router.get('/thesis/pending', [
       });
     }
 
+    const { Op } = require('sequelize');
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
+    const offset = (page - 1) * limit;
 
-    const theses = await Thesis.find({ status: 'Under Review' })
-      .populate('authors', 'firstName lastName email')
-      .populate('adviser', 'firstName lastName email')
-      .sort({ submittedAt: 1 })
-      .skip(skip)
-      .limit(limit);
-
-    const total = await Thesis.countDocuments({ status: 'Under Review' });
+    const { count, rows: theses } = await Thesis.findAndCountAll({
+      where: { status: 'Under Review' },
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+          through: { attributes: [] }
+        },
+        {
+          model: User,
+          as: 'adviser',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+          required: false
+        }
+      ],
+      order: [['submitted_at', 'ASC']],
+      limit,
+      offset,
+      distinct: true
+    });
 
     res.json({
       success: true,
       count: theses.length,
-      total,
+      total: count,
       page,
-      pages: Math.ceil(total / limit),
+      pages: Math.ceil(count / limit),
       data: theses
     });
   } catch (error) {
@@ -333,10 +491,8 @@ router.post('/departments', [
   body('name').trim().notEmpty().withMessage('Department name is required'),
   body('code').trim().notEmpty().withMessage('Department code is required'),
   body('description').optional().trim(),
-  body('head').optional().isMongoId().withMessage('Valid head ID is required'),
-  body('programs').optional().isArray().withMessage('Programs must be an array'),
-  body('contactInfo.email').optional().isEmail().withMessage('Valid email is required'),
-  body('contactInfo.phone').optional().matches(/^[\+]?[1-9][\d]{0,15}$/).withMessage('Valid phone number is required')
+  body('head_id').optional().isInt().withMessage('Valid head ID is required'),
+  body('contact_info').optional().isObject().withMessage('Contact info must be an object')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -348,7 +504,14 @@ router.post('/departments', [
       });
     }
 
-    const department = await Department.create(req.body);
+    const department = await Department.create({
+      name: req.body.name,
+      code: req.body.code,
+      description: req.body.description || null,
+      head_id: req.body.head_id || null,
+      contact_info: req.body.contact_info || {},
+      is_active: req.body.is_active !== undefined ? req.body.is_active : true
+    });
 
     res.status(201).json({
       success: true,
@@ -357,7 +520,7 @@ router.post('/departments', [
     });
   } catch (error) {
     console.error('Create department error:', error);
-    if (error.code === 11000) {
+    if (error.name === 'SequelizeUniqueConstraintError') {
       return res.status(400).json({
         success: false,
         message: 'Department with this name or code already exists'
@@ -375,14 +538,49 @@ router.post('/departments', [
 // @access  Private (Admin)
 router.get('/departments', async (req, res) => {
   try {
-    const departments = await Department.find()
-      .populate('head', 'firstName lastName email')
-      .sort({ name: 1 });
+    const { Course } = require('../models');
+    const { Op } = require('sequelize');
+    
+    const departments = await Department.findAll({
+      include: [{
+        model: Course,
+        as: 'courses',
+        attributes: ['id', 'name', 'code', 'level', 'is_active']
+      }],
+      order: [['name', 'ASC']]
+    });
+
+    // Get student counts for each department
+    const departmentsWithCounts = await Promise.all(
+      departments.map(async (dept) => {
+        const studentCount = await User.count({
+          where: {
+            department: dept.name,
+            role: 'student',
+            is_active: true
+          }
+        });
+
+        const thesisCount = await Thesis.count({
+          where: {
+            department: dept.name
+          }
+        });
+
+        return {
+          ...dept.toJSON(),
+          studentCount,
+          student_count: studentCount,
+          thesisCount,
+          thesis_count: thesisCount
+        };
+      })
+    );
 
     res.json({
       success: true,
-      count: departments.length,
-      data: departments
+      count: departmentsWithCounts.length,
+      data: departmentsWithCounts
     });
   } catch (error) {
     console.error('Get departments error:', error);
@@ -399,7 +597,7 @@ router.get('/departments', async (req, res) => {
 router.put('/departments/:id', [
   body('name').optional().trim().notEmpty().withMessage('Department name cannot be empty'),
   body('code').optional().trim().notEmpty().withMessage('Department code cannot be empty'),
-  body('isActive').optional().isBoolean()
+  body('is_active').optional().isBoolean()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -411,11 +609,7 @@ router.put('/departments/:id', [
       });
     }
 
-    const department = await Department.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    ).populate('head', 'firstName lastName email');
+    const department = await Department.findByPk(req.params.id);
 
     if (!department) {
       return res.status(404).json({
@@ -423,6 +617,15 @@ router.put('/departments/:id', [
         message: 'Department not found'
       });
     }
+
+    await department.update({
+      name: req.body.name !== undefined ? req.body.name : department.name,
+      code: req.body.code !== undefined ? req.body.code : department.code,
+      description: req.body.description !== undefined ? req.body.description : department.description,
+      head_id: req.body.head_id !== undefined ? req.body.head_id : department.head_id,
+      contact_info: req.body.contact_info || department.contact_info,
+      is_active: req.body.is_active !== undefined ? req.body.is_active : department.is_active
+    });
 
     res.json({
       success: true,
@@ -443,7 +646,10 @@ router.put('/departments/:id', [
 // @access  Private (Admin)
 router.delete('/departments/:id', async (req, res) => {
   try {
-    const department = await Department.findById(req.params.id);
+    const { Op } = require('sequelize');
+    const { Course } = require('../models');
+    
+    const department = await Department.findByPk(req.params.id);
 
     if (!department) {
       return res.status(404).json({
@@ -453,15 +659,29 @@ router.delete('/departments/:id', async (req, res) => {
     }
 
     // Check if department has users
-    const userCount = await User.countDocuments({ department: department.name });
-    if (userCount > 0) {
+    const userCount = await User.count({ 
+      where: { 
+        department: department.name,
+        is_active: true
+      } 
+    });
+    
+    // Check if department has courses
+    const courseCount = await Course.count({
+      where: {
+        department_id: department.id,
+        is_active: true
+      }
+    });
+    
+    if (userCount > 0 || courseCount > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Cannot delete department with existing users'
+        message: `Cannot delete department with ${userCount} user(s) and ${courseCount} course(s)`
       });
     }
 
-    await Department.findByIdAndDelete(req.params.id);
+    await department.destroy();
 
     res.json({
       success: true,
@@ -550,6 +770,96 @@ router.post('/bulk', [
     });
   } catch (error) {
     console.error('Bulk operation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @desc    Get audit logs
+// @route   GET /api/admin/audit-logs
+// @access  Private (Admin)
+// Objective 5.5: Comprehensive audit logging for accountability
+router.get('/audit-logs', [
+  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
+  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
+  query('action').optional().trim(),
+  query('resourceType').optional().trim(),
+  query('userId').optional().isInt().withMessage('User ID must be an integer'),
+  query('status').optional().isIn(['success', 'failure', 'pending']),
+  query('dateFrom').optional().isISO8601().withMessage('Date from must be a valid date'),
+  query('dateTo').optional().isISO8601().withMessage('Date to must be a valid date')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = (page - 1) * limit;
+
+    // Build where clause
+    const where = {};
+    
+    if (req.query.action) {
+      where.action = { [Op.like]: `%${req.query.action}%` };
+    }
+    
+    if (req.query.resourceType) {
+      where.resource_type = req.query.resourceType;
+    }
+    
+    if (req.query.userId) {
+      where.user_id = req.query.userId;
+    }
+    
+    if (req.query.status) {
+      where.status = req.query.status;
+    }
+    
+    if (req.query.dateFrom || req.query.dateTo) {
+      where.created_at = {};
+      if (req.query.dateFrom) {
+        where.created_at[Op.gte] = new Date(req.query.dateFrom);
+      }
+      if (req.query.dateTo) {
+        where.created_at[Op.lte] = new Date(req.query.dateTo);
+      }
+    }
+
+    // Get audit logs with pagination
+    const { count, rows: logs } = await AuditLog.findAndCountAll({
+      where,
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+          required: false
+        }
+      ],
+      order: [['created_at', 'DESC']],
+      limit,
+      offset
+    });
+
+    res.json({
+      success: true,
+      count: logs.length,
+      total: count,
+      page,
+      pages: Math.ceil(count / limit),
+      data: logs
+    });
+  } catch (error) {
+    console.error('Get audit logs error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'

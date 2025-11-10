@@ -29,11 +29,35 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/auth/login';
-      toast.error('Session expired. Please login again.');
+    // Don't redirect on login/register/auth errors - let the components handle them
+    const isAuthEndpoint = error.config?.url?.includes('/auth/login') || 
+                          error.config?.url?.includes('/auth/register') ||
+                          error.config?.url?.includes('/auth/me');
+    
+    // Don't redirect immediately after login (give it time to process)
+    const justLoggedIn = sessionStorage.getItem('justLoggedIn') === 'true';
+    
+    // Handle network errors (backend not running)
+    if (!error.response && error.request) {
+      console.error('Network Error: Backend server is not responding. Please ensure the backend is running on port 5000.');
+      // Don't show toast for network errors to avoid spam, let components handle it
     }
+    
+    if (error.response?.status === 401 && !isAuthEndpoint && !justLoggedIn) {
+      // Only redirect if not already on login page and not during login/register
+      if (!window.location.pathname.includes('/auth/login')) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/auth/login';
+        toast.error('Session expired. Please login again.');
+      }
+    }
+    
+    // Clear the justLoggedIn flag after a delay
+    if (justLoggedIn) {
+      setTimeout(() => sessionStorage.removeItem('justLoggedIn'), 5000);
+    }
+    
     return Promise.reject(error);
   }
 );
@@ -53,6 +77,7 @@ export const authAPI = {
 export const usersAPI = {
   getUsers: (params) => api.get('/users', { params }),
   getUser: (id) => api.get(`/users/${id}`),
+  createUser: (userData) => api.post('/users', userData),
   updateUser: (id, userData) => api.put(`/users/${id}`, userData),
   deleteUser: (id) => api.delete(`/users/${id}`),
   uploadAvatar: (id, file) => {
@@ -74,11 +99,12 @@ export const thesisAPI = {
   createThesis: (thesisData) => api.post('/thesis', thesisData),
   updateThesis: (id, thesisData) => api.put(`/thesis/${id}`, thesisData),
   deleteThesis: (id) => api.delete(`/thesis/${id}`),
-  uploadDocument: (id, file) => {
+  uploadDocument: (id, file, onUploadProgress) => {
     const formData = new FormData();
     formData.append('thesisDocument', file);
     return api.post(`/thesis/${id}/document`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: onUploadProgress || (() => {}), // Objective 4.3, 4.5: Progress tracking
     });
   },
   uploadSupplementaryFiles: (id, files) => {
@@ -114,11 +140,20 @@ export const calendarAPI = {
   }),
 };
 
+// Dashboard API
+export const dashboardAPI = {
+  getStats: () => api.get('/dashboard/stats'),
+  getActivity: () => api.get('/dashboard/activity'),
+  getMyTheses: (limit) => api.get('/dashboard/my-theses', { params: { limit } }),
+  getUpcomingEvents: (limit) => api.get('/dashboard/upcoming-events', { params: { limit } }),
+};
+
 // Admin API
 export const adminAPI = {
   getDashboard: () => api.get('/admin/dashboard'),
   getAnalytics: (params) => api.get('/admin/analytics', { params }),
   reviewThesis: (id, reviewData) => api.put(`/admin/thesis/${id}/review`, reviewData),
+  getTheses: (params) => api.get('/admin/thesis', { params }), // Get all theses (admin only)
   getPendingTheses: (params) => api.get('/admin/thesis/pending', { params }),
   bulkOperation: (operation, ids) => api.post('/admin/bulk', { operation, ids }),
   
@@ -127,6 +162,21 @@ export const adminAPI = {
   createDepartment: (departmentData) => api.post('/admin/departments', departmentData),
   updateDepartment: (id, departmentData) => api.put(`/admin/departments/${id}`, departmentData),
   deleteDepartment: (id) => api.delete(`/admin/departments/${id}`),
+};
+
+// Courses API
+export const coursesAPI = {
+  getCourses: (params) => api.get('/courses', { params }),
+  getCourse: (id) => api.get(`/courses/${id}`),
+  createCourse: (courseData) => api.post('/courses', courseData),
+  updateCourse: (id, courseData) => api.put(`/courses/${id}`, courseData),
+  deleteCourse: (id) => api.delete(`/courses/${id}`),
+};
+
+// Departments API (public access for authenticated users)
+export const departmentsAPI = {
+  getDepartments: () => api.get('/dashboard/departments'), // Accessible to all authenticated users
+  getDepartment: (id) => api.get(`/admin/departments/${id}`), // Admin only for individual dept
 };
 
 // File upload helper

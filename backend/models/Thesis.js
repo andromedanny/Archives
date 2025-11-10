@@ -33,9 +33,9 @@ const Thesis = sequelize.define('Thesis', {
       }
     }
   },
-  adviserId: {
+  adviser_id: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true,
     references: {
       model: 'users',
       key: 'id'
@@ -59,7 +59,7 @@ const Thesis = sequelize.define('Thesis', {
       }
     }
   },
-  academicYear: {
+  academic_year: {
     type: DataTypes.STRING,
     allowNull: false,
     validate: {
@@ -85,11 +85,11 @@ const Thesis = sequelize.define('Thesis', {
     type: DataTypes.ENUM('Draft', 'Under Review', 'Approved', 'Published', 'Rejected'),
     defaultValue: 'Draft'
   },
-  mainDocument: {
+  main_document: {
     type: DataTypes.JSON,
     allowNull: true
   },
-  supplementaryFiles: {
+  supplementary_files: {
     type: DataTypes.JSON,
     allowNull: true,
     defaultValue: []
@@ -101,7 +101,7 @@ const Thesis = sequelize.define('Thesis', {
       language: 'English'
     }
   },
-  reviewerId: {
+  reviewer_id: {
     type: DataTypes.INTEGER,
     allowNull: true,
     references: {
@@ -109,11 +109,11 @@ const Thesis = sequelize.define('Thesis', {
       key: 'id'
     }
   },
-  reviewComments: {
+  review_comments: {
     type: DataTypes.TEXT,
     allowNull: true
   },
-  reviewScore: {
+  review_score: {
     type: DataTypes.INTEGER,
     allowNull: true,
     validate: {
@@ -121,27 +121,27 @@ const Thesis = sequelize.define('Thesis', {
       max: 100
     }
   },
-  reviewedAt: {
+  reviewed_at: {
     type: DataTypes.DATE,
     allowNull: true
   },
-  downloadCount: {
+  download_count: {
     type: DataTypes.INTEGER,
     defaultValue: 0
   },
-  viewCount: {
+  view_count: {
     type: DataTypes.INTEGER,
     defaultValue: 0
   },
-  isPublic: {
+  is_public: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
   },
-  publishedAt: {
+  published_at: {
     type: DataTypes.DATE,
     allowNull: true
   },
-  submittedAt: {
+  submitted_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW
   }
@@ -151,30 +151,51 @@ const Thesis = sequelize.define('Thesis', {
     { fields: ['title'] },
     { fields: ['department'] },
     { fields: ['program'] },
-    { fields: ['academicYear'] },
+    { fields: ['academic_year'] },
     { fields: ['category'] },
     { fields: ['status'] },
-    { fields: ['adviserId'] },
-    { fields: ['isPublic'] },
-    { fields: ['publishedAt'] }
+    { fields: ['adviser_id'] },
+    { fields: ['is_public'] },
+    { fields: ['published_at'] }
   ]
 });
 
 // Instance methods
 Thesis.prototype.incrementViewCount = async function() {
-  this.viewCount += 1;
+  this.view_count += 1;
   return await this.save();
 };
 
 Thesis.prototype.incrementDownloadCount = async function() {
-  this.downloadCount += 1;
+  this.download_count += 1;
   return await this.save();
+};
+
+// Instance methods for authors
+Thesis.prototype.addAuthor = async function(userId) {
+  const { ThesisAuthors } = require('./index');
+  await ThesisAuthors.findOrCreate({
+    where: {
+      thesis_id: this.id,
+      user_id: userId
+    }
+  });
+};
+
+Thesis.prototype.removeAuthor = async function(userId) {
+  const { ThesisAuthors } = require('./index');
+  await ThesisAuthors.destroy({
+    where: {
+      thesis_id: this.id,
+      user_id: userId
+    }
+  });
 };
 
 // Static methods
 Thesis.searchTheses = async function(query, filters = {}) {
   const whereClause = {
-    isPublic: true,
+    is_public: true,
     status: 'Published'
   };
 
@@ -206,7 +227,8 @@ Thesis.searchTheses = async function(query, filters = {}) {
       {
         model: sequelize.models.User,
         as: 'authors',
-        attributes: ['id', 'firstName', 'lastName']
+        attributes: ['id', 'firstName', 'lastName'],
+        through: { attributes: [] }
       },
       {
         model: sequelize.models.User,
@@ -214,7 +236,7 @@ Thesis.searchTheses = async function(query, filters = {}) {
         attributes: ['id', 'firstName', 'lastName']
       }
     ],
-    order: [['publishedAt', 'DESC']]
+    order: [['published_at', 'DESC']]
   });
 };
 

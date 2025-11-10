@@ -55,7 +55,7 @@ const User = sequelize.define('User', {
     }
   },
   role: {
-    type: DataTypes.ENUM('student', 'faculty', 'admin', 'adviser'),
+    type: DataTypes.ENUM('student', 'faculty', 'admin', 'adviser', 'prof'),
     defaultValue: 'student'
   },
   department: {
@@ -67,7 +67,12 @@ const User = sequelize.define('User', {
       }
     }
   },
-  studentId: {
+  course: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: 'Course code (e.g., BSIT, BSCS)'
+  },
+  student_id: {
     type: DataTypes.STRING,
     unique: true,
     allowNull: true
@@ -86,37 +91,39 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: true
   },
-  isActive: {
+  is_active: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
   },
-  lastLogin: {
+  last_login: {
     type: DataTypes.DATE,
     allowNull: true
   },
-  resetPasswordToken: {
+  reset_password_token: {
     type: DataTypes.STRING,
     allowNull: true
   },
-  resetPasswordExpire: {
+  reset_password_expire: {
     type: DataTypes.DATE,
     allowNull: true
   },
-  emailVerificationToken: {
+  email_verification_token: {
     type: DataTypes.STRING,
     allowNull: true
   },
-  isEmailVerified: {
+  is_email_verified: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
   }
 }, {
   tableName: 'users',
   indexes: [
-    { fields: ['email'] },
-    { fields: ['studentId'] },
+    // Note: email and student_id already have unique: true, which creates indexes
+    // Only add non-unique indexes here
     { fields: ['department'] },
-    { fields: ['role'] }
+    { fields: ['course'] },
+    { fields: ['role'] },
+    { fields: ['is_active'] }
   ],
   hooks: {
     beforeCreate: async (user) => {
@@ -142,9 +149,9 @@ User.prototype.comparePassword = async function(candidatePassword) {
 User.prototype.toJSON = function() {
   const values = { ...this.get() };
   delete values.password;
-  delete values.resetPasswordToken;
-  delete values.resetPasswordExpire;
-  delete values.emailVerificationToken;
+  delete values.reset_password_token;
+  delete values.reset_password_expire;
+  delete values.email_verification_token;
   return values;
 };
 

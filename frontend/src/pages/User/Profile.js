@@ -1,42 +1,48 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import Header from '../../components/Layout/Header';
 import Footer from '../../components/Layout/Footer';
-import BackgroundImage from '../../components/UI/BackgroundImage';
+import { useAuth } from '../../contexts/AuthContext';
+import { usersAPI } from '../../services/api';
+import toast from 'react-hot-toast';
 
 const Profile = () => {
-  const [profile, setProfile] = useState({
-    name: '',
-    email: '',
-    role: '',
-    department: '',
-    joinDate: '',
-    thesisCount: 0
-  });
+  const { user, isLoading: authLoading } = useAuth();
+  const [stats, setStats] = useState({ thesisCount: 0, downloads: 0, views: 0 });
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Mock data - replace with actual API call
-    const mockProfile = {
-      name: 'John Doe',
-      email: 'john.doe@example.com',
-      role: 'Student',
-      department: 'Computer Science',
-      joinDate: '2023-01-15',
-      thesisCount: 2
-    };
-    
-    setProfile(mockProfile);
-    setIsLoading(false);
-  }, []);
+    const fetchProfileStats = async () => {
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
 
-  if (isLoading) {
+      try {
+        const response = await usersAPI.getUserStats(user.id);
+        const data = response.data || response;
+        setStats({
+          thesisCount: data.thesisCount ?? data.thesis_count ?? 0,
+          downloads: data.downloadCount ?? data.download_count ?? 0,
+          views: data.viewCount ?? data.view_count ?? 0,
+        });
+      } catch (error) {
+        console.error('Failed to load profile stats:', error);
+        toast.error('Unable to load profile statistics.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProfileStats();
+  }, [user]);
+
+  if (authLoading || isLoading) {
     return (
       <>
-        <BackgroundImage />
         <Header />
-        <div className="min-h-screen flex items-center justify-center pt-16">
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 pt-20">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
         <Footer />
@@ -44,93 +50,114 @@ const Profile = () => {
     );
   }
 
+  if (!user) {
+    return (
+      <>
+        <Header />
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 pt-20">
+          <p className="text-gray-500">We couldn t find your profile information.</p>
+        </div>
+        <Footer />
+      </>
+    );
+  }
+
+  const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+  const firstInitial = user.firstName?.[0] || user.email?.[0] || '';
+  const lastInitial = user.lastName?.[0] || '';
+  const initials = `${firstInitial}${lastInitial}`.toUpperCase().trim() || '?';
+  const departmentName = user.department?.name || user.department || 'Not assigned';
+  const courseName = user.course?.name || user.course || 'Not provided';
+  const roleLabel = user.role ? user.role.replace(/_/g, ' ') : 'Student';
+  const createdAt = user.createdAt || user.created_at;
+  const joinDate = createdAt
+    ? new Date(createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : 'Not available';
+  const isActive = user.isActive ?? user.is_active ?? true;
+
   return (
     <>
       <Helmet>
         <title>Profile - FAITH Colleges Thesis Archive</title>
         <meta name="description" content="View your profile information" />
       </Helmet>
-      
-      <BackgroundImage />
+
       <Header />
-      
-      <main className="min-h-screen pt-16 pb-20">
-        <div className="w-11/12 max-w-4xl mx-auto mt-8">
+
+      <main className="min-h-screen bg-gray-50 pt-24 pb-16">
+        <div className="w-11/12 max-w-5xl mx-auto">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="bg-white/95 backdrop-blur-sm p-8 rounded-lg shadow-lg"
+            transition={{ duration: 0.4 }}
+            className="bg-white rounded-3xl shadow-xl border border-gray-100 p-10"
           >
-            <h1 className="text-3xl font-bold text-gray-800 mb-8">My Profile</h1>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Profile Information */}
-              <div className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-10">
+              <div className="flex items-center gap-4">
+                <div className="h-16 w-16 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold">
+                  {initials}
+                </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-800 mb-4">Personal Information</h2>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Name</label>
-                      <p className="mt-1 text-gray-900">{profile.name}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Email</label>
-                      <p className="mt-1 text-gray-900">{profile.email}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Role</label>
-                      <p className="mt-1 text-gray-900">{profile.role}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Department</label>
-                      <p className="mt-1 text-gray-900">{profile.department}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Member Since</label>
-                      <p className="mt-1 text-gray-900">{new Date(profile.joinDate).toLocaleDateString()}</p>
-                    </div>
-                  </div>
+                  <h1 className="text-3xl font-semibold text-gray-900">{fullName}</h1>
+                  <p className="text-sm text-gray-500">{user.email}</p>
                 </div>
               </div>
-
-              {/* Statistics */}
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-800 mb-4">Statistics</h2>
-                  <div className="space-y-4">
-                    <div className="bg-blue-50 p-4 rounded-lg">
-                      <div className="text-2xl font-bold text-blue-600">{profile.thesisCount}</div>
-                      <div className="text-sm text-gray-600">Theses Submitted</div>
-                    </div>
-                    <div className="bg-green-50 p-4 rounded-lg">
-                      <div className="text-2xl font-bold text-green-600">0</div>
-                      <div className="text-sm text-gray-600">Downloads</div>
-                    </div>
-                    <div className="bg-purple-50 p-4 rounded-lg">
-                      <div className="text-2xl font-bold text-purple-600">0</div>
-                      <div className="text-sm text-gray-600">Views</div>
-                    </div>
-                  </div>
-                </div>
+              <div className="text-right">
+                <span className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-blue-50 text-blue-600 border border-blue-100 uppercase">
+                  {roleLabel}
+                </span>
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="mt-8 flex gap-4">
-              <button className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                Edit Profile
-              </button>
-              <button className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
-                Change Password
-              </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <section className="space-y-4">
+                <h2 className="text-lg font-semibold text-gray-800">Profile Details</h2>
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 space-y-4">
+                  <Detail label="Department" value={departmentName} />
+                  <Detail label="Course" value={courseName} />
+                  <Detail label="Member Since" value={joinDate} />
+                  <Detail label="Contact Email" value={user.email} />
+                  <Detail label="Status" value={isActive ? 'Active' : 'Inactive'} />
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <h2 className="text-lg font-semibold text-gray-800">Thesis Activity</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <StatCard label="Theses Submitted" value={stats.thesisCount} color="blue" />
+                  <StatCard label="Downloads" value={stats.downloads} color="green" />
+                  <StatCard label="Views" value={stats.views} color="purple" />
+                </div>
+              </section>
             </div>
           </motion.div>
         </div>
       </main>
-      
+
       <Footer />
     </>
+  );
+};
+
+const Detail = ({ label, value }) => (
+  <div>
+    <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">{label}</p>
+    <p className="text-sm text-gray-800 mt-1">{value || 'Not provided'}</p>
+  </div>
+);
+
+const StatCard = ({ label, value, color }) => {
+  const colorClasses = {
+    blue: 'bg-blue-50 border-blue-100 text-blue-600',
+    green: 'bg-green-50 border-green-100 text-green-600',
+    purple: 'bg-purple-50 border-purple-100 text-purple-600',
+  };
+
+  return (
+    <div className={`rounded-2xl border ${colorClasses[color] || 'bg-gray-50 border-gray-100 text-gray-700'} p-4 shadow-sm`}>
+      <p className="text-3xl font-bold">{value}</p>
+      <p className="text-xs uppercase tracking-wide mt-1">{label}</p>
+    </div>
   );
 };
 

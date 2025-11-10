@@ -1,11 +1,83 @@
 const express = require('express');
 const { body, validationResult, query } = require('express-validator');
-const Calendar = require('../models/Calendar');
-const User = require('../models/User');
+const { Op } = require('sequelize');
+const { Calendar, User } = require('../models');
 const { protect, authorize } = require('../middleware/auth');
 const { uploadCalendarAttachments, handleUploadError, getFileInfo } = require('../middleware/upload');
+const { logAction } = require('../middleware/audit');
 
 const router = express.Router();
+
+/**
+ * Check for calendar event conflicts (Objective 2.3: Reduce scheduling conflicts)
+ * @param {Date} eventDate - Event date
+ * @param {Date} endDate - End date (optional)
+ * @param {String} department - Department
+ * @param {Number} excludeId - Event ID to exclude from conflict check
+ * @returns {Promise<Array>} Array of conflicting events
+ */
+async function checkEventConflicts(eventDate, endDate, department, excludeId = null) {
+  const whereClause = {
+    department: department,
+    status: 'scheduled',
+    [Op.or]: []
+  };
+
+  if (excludeId) {
+    whereClause.id = { [Op.ne]: excludeId };
+  }
+
+  // Check for overlapping events
+  if (endDate) {
+    // Event has end date - check if it overlaps with existing events
+    whereClause[Op.or].push(
+      {
+        // Existing event starts before new event ends and ends after new event starts
+        event_date: {
+          [Op.lte]: endDate
+        },
+        end_date: {
+          [Op.gte]: eventDate
+        }
+      },
+      {
+        // Existing event has no end date but starts within new event range
+        event_date: {
+          [Op.between]: [eventDate, endDate]
+        },
+        end_date: null
+      }
+    );
+  } else {
+    // Event has no end date - check if any event overlaps
+    whereClause[Op.or].push(
+      {
+        // Existing event starts on the same date
+        event_date: eventDate
+      },
+      {
+        // Existing event spans the new event date
+        event_date: {
+          [Op.lte]: eventDate
+        },
+        end_date: {
+          [Op.gte]: eventDate
+        }
+      }
+    );
+  }
+
+  return await Calendar.findAll({
+    where: whereClause,
+    include: [
+      {
+        model: User,
+        as: 'organizer',
+        attributes: ['id', 'firstName', 'lastName', 'email']
+      }
+    ]
+  });
+}
 
 // @desc    Get all calendar events
 // @route   GET /api/calendar
@@ -14,7 +86,7 @@ router.get('/', protect, [
   query('startDate').optional().isISO8601().withMessage('Start date must be a valid date'),
   query('endDate').optional().isISO8601().withMessage('End date must be a valid date'),
   query('department').optional().trim(),
-  query('eventType').optional().isIn(['Thesis Defense', 'Submission Deadline', 'Review Meeting', 'Workshop', 'Conference', 'Other']),
+  query('eventType').optional().isIn(['thesis_submission', 'thesis_defense', 'title_defense', 'meeting', 'deadline', 'other']),
   query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
   query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('Limit must be between 1 and 50')
 ], async (req, res) => {
@@ -30,55 +102,61 @@ router.get('/', protect, [
 
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
+    const offset = (page - 1) * limit;
 
-    // Build query
-    const query = {};
+    // Build where clause
+    const where = {};
 
     // Date range filter
-    if (req.query.startDate && req.query.endDate) {
-      query.startDate = { $gte: new Date(req.query.startDate) };
-      query.endDate = { $lte: new Date(req.query.endDate) };
-    } else if (req.query.startDate) {
-      query.startDate = { $gte: new Date(req.query.startDate) };
-    } else if (req.query.endDate) {
-      query.endDate = { $lte: new Date(req.query.endDate) };
+    if (req.query.startDate || req.query.endDate) {
+      where.event_date = {};
+      if (req.query.startDate) {
+        where.event_date[Op.gte] = new Date(req.query.startDate);
+      }
+      if (req.query.endDate) {
+        where.event_date[Op.lte] = new Date(req.query.endDate);
+      }
     }
 
     // Department filter
     if (req.query.department) {
-      query.department = req.query.department;
+      where.department = req.query.department;
     }
 
     // Event type filter
     if (req.query.eventType) {
-      query.eventType = req.query.eventType;
+      where.event_type = req.query.eventType;
     }
 
-    // If user is not admin, only show events from their department or events they're attending
+    // If user is not admin, only show events from their department or public events
     if (req.user.role !== 'admin') {
-      query.$or = [
+      where[Op.or] = [
         { department: req.user.department },
-        { 'attendees.user': req.user.id },
-        { createdBy: req.user.id }
+        { is_public: true }
       ];
     }
 
-    const events = await Calendar.find(query)
-      .populate('createdBy', 'firstName lastName email')
-      .populate('attendees.user', 'firstName lastName email')
-      .sort({ startDate: 1, startTime: 1 })
-      .skip(skip)
-      .limit(limit);
-
-    const total = await Calendar.countDocuments(query);
+    // Get events with pagination
+    const { count, rows: events } = await Calendar.findAndCountAll({
+      where,
+      include: [
+        {
+          model: User,
+          as: 'organizer',
+          attributes: ['id', 'firstName', 'lastName', 'email']
+        }
+      ],
+      order: [['event_date', 'ASC']],
+      limit,
+      offset
+    });
 
     res.json({
       success: true,
       count: events.length,
-      total,
+      total: count,
       page,
-      pages: Math.ceil(total / limit),
+      pages: Math.ceil(count / limit),
       data: events
     });
   } catch (error) {
@@ -119,9 +197,15 @@ router.get('/upcoming', protect, async (req, res) => {
 // @access  Private
 router.get('/:id', protect, async (req, res) => {
   try {
-    const event = await Calendar.findById(req.params.id)
-      .populate('createdBy', 'firstName lastName email')
-      .populate('attendees.user', 'firstName lastName email');
+    const event = await Calendar.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'organizer',
+          attributes: ['id', 'firstName', 'lastName', 'email']
+        }
+      ]
+    });
 
     if (!event) {
       return res.status(404).json({
@@ -133,8 +217,7 @@ router.get('/:id', protect, async (req, res) => {
     // Check if user can view this event
     if (req.user.role !== 'admin' && 
         event.department !== req.user.department && 
-        !event.attendees.some(attendee => attendee.user._id.toString() === req.user.id) &&
-        event.createdBy._id.toString() !== req.user.id) {
+        !event.is_public) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -160,16 +243,11 @@ router.get('/:id', protect, async (req, res) => {
 router.post('/', protect, authorize('faculty', 'admin', 'adviser'), [
   body('title').trim().notEmpty().withMessage('Title is required'),
   body('description').optional().trim(),
-  body('startDate').isISO8601().withMessage('Start date is required and must be valid'),
-  body('endDate').isISO8601().withMessage('End date is required and must be valid'),
-  body('startTime').matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Start time must be in HH:MM format'),
-  body('endTime').matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('End time must be in HH:MM format'),
+  body('event_date').isISO8601().withMessage('Event date is required and must be valid'),
+  body('end_date').optional().isISO8601().withMessage('End date must be valid'),
   body('location').optional().trim(),
-  body('eventType').isIn(['Thesis Defense', 'Submission Deadline', 'Review Meeting', 'Workshop', 'Conference', 'Other']).withMessage('Invalid event type'),
-  body('department').trim().notEmpty().withMessage('Department is required'),
-  body('priority').optional().isIn(['Low', 'Medium', 'High', 'Critical']),
-  body('isAllDay').optional().isBoolean(),
-  body('attendees').optional().isArray()
+  body('event_type').isIn(['thesis_submission', 'thesis_defense', 'title_defense', 'meeting', 'deadline', 'other']).withMessage('Invalid event type'),
+  body('department').trim().notEmpty().withMessage('Department is required')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -184,63 +262,92 @@ router.post('/', protect, authorize('faculty', 'admin', 'adviser'), [
     const {
       title,
       description,
-      startDate,
-      endDate,
-      startTime,
-      endTime,
+      event_date,
+      end_date,
       location,
-      eventType,
+      event_type,
       department,
-      priority,
-      isAllDay,
-      attendees,
-      notes
+      thesis_id,
+      is_public,
+      attendees
     } = req.body;
 
-    // Validate attendees if provided
-    if (attendees && attendees.length > 0) {
-      const attendeeIds = attendees.map(attendee => attendee.user);
-      const validUsers = await User.find({ _id: { $in: attendeeIds } });
-      
-      if (validUsers.length !== attendeeIds.length) {
-        return res.status(400).json({
-          success: false,
-          message: 'Some attendees are invalid'
-        });
-      }
-    }
+    // Check for conflicts (Objective 2.3: Reduce scheduling conflicts)
+    const conflicts = await checkEventConflicts(
+      new Date(event_date),
+      end_date ? new Date(end_date) : null,
+      department
+    );
 
     // Create event
     const event = await Calendar.create({
       title,
       description,
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
-      startTime,
-      endTime,
+      event_date: new Date(event_date),
+      end_date: end_date ? new Date(end_date) : null,
       location,
-      eventType,
+      event_type: event_type || 'other',
       department,
-      priority: priority || 'Medium',
-      isAllDay: isAllDay || false,
+      thesis_id: thesis_id || null,
+      organizer_id: req.user.id,
       attendees: attendees || [],
-      notes,
-      createdBy: req.user.id
+      is_public: is_public !== undefined ? is_public : true,
+      status: 'scheduled'
     });
 
-    // Populate the created event
-    await event.populate([
-      { path: 'createdBy', select: 'firstName lastName email' },
-      { path: 'attendees.user', select: 'firstName lastName email' }
-    ]);
+    // Reload with associations
+    await event.reload({
+      include: [
+        {
+          model: User,
+          as: 'organizer',
+          attributes: ['id', 'firstName', 'lastName', 'email']
+        }
+      ]
+    });
+
+    // Log event creation (Objective 5.5: Audit logging)
+    await logAction({
+      userId: req.user.id,
+      action: 'calendar.create',
+      resourceType: 'calendar',
+      resourceId: event.id,
+      description: `Created calendar event: ${event.title}`,
+      status: 'success',
+      metadata: {
+        conflicts: conflicts.length,
+        hasConflicts: conflicts.length > 0
+      },
+      req
+    });
 
     res.status(201).json({
       success: true,
-      message: 'Event created successfully',
-      data: event
+      message: conflicts.length > 0 
+        ? `Event created successfully. Warning: ${conflicts.length} conflicting event(s) found.`
+        : 'Event created successfully',
+      data: event,
+      conflicts: conflicts.length > 0 ? conflicts.map(c => ({
+        id: c.id,
+        title: c.title,
+        event_date: c.event_date,
+        organizer: c.organizer
+      })) : []
     });
   } catch (error) {
     console.error('Create calendar event error:', error);
+    
+    // Log creation failure
+    await logAction({
+      userId: req.user?.id,
+      action: 'calendar.create',
+      resourceType: 'calendar',
+      description: `Failed to create calendar event: ${req.body.title}`,
+      status: 'failure',
+      errorMessage: error.message,
+      req
+    });
+
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -253,12 +360,9 @@ router.post('/', protect, authorize('faculty', 'admin', 'adviser'), [
 // @access  Private (Event creator, Admin)
 router.put('/:id', protect, [
   body('title').optional().trim().notEmpty().withMessage('Title cannot be empty'),
-  body('startDate').optional().isISO8601().withMessage('Start date must be valid'),
-  body('endDate').optional().isISO8601().withMessage('End date must be valid'),
-  body('startTime').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Start time must be in HH:MM format'),
-  body('endTime').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('End time must be in HH:MM format'),
-  body('priority').optional().isIn(['Low', 'Medium', 'High', 'Critical']),
-  body('status').optional().isIn(['Scheduled', 'In Progress', 'Completed', 'Cancelled', 'Postponed'])
+  body('event_date').optional().isISO8601().withMessage('Event date must be valid'),
+  body('end_date').optional().isISO8601().withMessage('End date must be valid'),
+  body('status').optional().isIn(['scheduled', 'in_progress', 'completed', 'cancelled'])
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -270,7 +374,7 @@ router.put('/:id', protect, [
       });
     }
 
-    const event = await Calendar.findById(req.params.id);
+    const event = await Calendar.findByPk(req.params.id);
 
     if (!event) {
       return res.status(404).json({
@@ -280,38 +384,72 @@ router.put('/:id', protect, [
     }
 
     // Check if user can update this event
-    if (event.createdBy.toString() !== req.user.id && req.user.role !== 'admin') {
+    if (event.organizer_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to update this event'
       });
     }
 
+    // Check for conflicts if date is being changed (Objective 2.3: Reduce scheduling conflicts)
+    let conflicts = [];
+    if (req.body.event_date || req.body.end_date) {
+      const eventDate = req.body.event_date ? new Date(req.body.event_date) : event.event_date;
+      const endDate = req.body.end_date ? new Date(req.body.end_date) : event.end_date;
+      conflicts = await checkEventConflicts(eventDate, endDate, event.department, event.id);
+    }
+
+    // Update event
     const updateData = {};
     if (req.body.title) updateData.title = req.body.title;
     if (req.body.description !== undefined) updateData.description = req.body.description;
-    if (req.body.startDate) updateData.startDate = new Date(req.body.startDate);
-    if (req.body.endDate) updateData.endDate = new Date(req.body.endDate);
-    if (req.body.startTime) updateData.startTime = req.body.startTime;
-    if (req.body.endTime) updateData.endTime = req.body.endTime;
+    if (req.body.event_date) updateData.event_date = new Date(req.body.event_date);
+    if (req.body.end_date !== undefined) updateData.end_date = req.body.end_date ? new Date(req.body.end_date) : null;
     if (req.body.location !== undefined) updateData.location = req.body.location;
-    if (req.body.priority) updateData.priority = req.body.priority;
+    if (req.body.event_type) updateData.event_type = req.body.event_type;
     if (req.body.status) updateData.status = req.body.status;
-    if (req.body.notes !== undefined) updateData.notes = req.body.notes;
+    if (req.body.is_public !== undefined) updateData.is_public = req.body.is_public;
 
-    const updatedEvent = await Calendar.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    ).populate([
-      { path: 'createdBy', select: 'firstName lastName email' },
-      { path: 'attendees.user', select: 'firstName lastName email' }
-    ]);
+    await event.update(updateData);
+
+    // Reload with associations
+    await event.reload({
+      include: [
+        {
+          model: User,
+          as: 'organizer',
+          attributes: ['id', 'firstName', 'lastName', 'email']
+        }
+      ]
+    });
+
+    // Log event update
+    await logAction({
+      userId: req.user.id,
+      action: 'calendar.update',
+      resourceType: 'calendar',
+      resourceId: event.id,
+      description: `Updated calendar event: ${event.title}`,
+      status: 'success',
+      metadata: {
+        conflicts: conflicts.length,
+        hasConflicts: conflicts.length > 0
+      },
+      req
+    });
 
     res.json({
       success: true,
-      message: 'Event updated successfully',
-      data: updatedEvent
+      message: conflicts.length > 0 
+        ? `Event updated successfully. Warning: ${conflicts.length} conflicting event(s) found.`
+        : 'Event updated successfully',
+      data: event,
+      conflicts: conflicts.length > 0 ? conflicts.map(c => ({
+        id: c.id,
+        title: c.title,
+        event_date: c.event_date,
+        organizer: c.organizer
+      })) : []
     });
   } catch (error) {
     console.error('Update calendar event error:', error);
@@ -327,7 +465,7 @@ router.put('/:id', protect, [
 // @access  Private (Event creator, Admin)
 router.delete('/:id', protect, async (req, res) => {
   try {
-    const event = await Calendar.findById(req.params.id);
+    const event = await Calendar.findByPk(req.params.id);
 
     if (!event) {
       return res.status(404).json({
@@ -337,14 +475,26 @@ router.delete('/:id', protect, async (req, res) => {
     }
 
     // Check if user can delete this event
-    if (event.createdBy.toString() !== req.user.id && req.user.role !== 'admin') {
+    if (event.organizer_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to delete this event'
       });
     }
 
-    await Calendar.findByIdAndDelete(req.params.id);
+    const eventTitle = event.title;
+    await event.destroy();
+
+    // Log event deletion
+    await logAction({
+      userId: req.user.id,
+      action: 'calendar.delete',
+      resourceType: 'calendar',
+      resourceId: req.params.id,
+      description: `Deleted calendar event: ${eventTitle}`,
+      status: 'success',
+      req
+    });
 
     res.json({
       success: true,
@@ -352,109 +502,6 @@ router.delete('/:id', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Delete calendar event error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
-
-// @desc    Respond to event invitation
-// @route   PUT /api/calendar/:id/respond
-// @access  Private
-router.put('/:id/respond', protect, [
-  body('status').isIn(['Accepted', 'Declined']).withMessage('Status must be Accepted or Declined')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-
-    const event = await Calendar.findById(req.params.id);
-
-    if (!event) {
-      return res.status(404).json({
-        success: false,
-        message: 'Event not found'
-      });
-    }
-
-    // Find user in attendees
-    const attendeeIndex = event.attendees.findIndex(
-      attendee => attendee.user.toString() === req.user.id
-    );
-
-    if (attendeeIndex === -1) {
-      return res.status(400).json({
-        success: false,
-        message: 'You are not invited to this event'
-      });
-    }
-
-    // Update attendee status
-    event.attendees[attendeeIndex].status = req.body.status;
-    await event.save();
-
-    res.json({
-      success: true,
-      message: `Event response updated to ${req.body.status}`,
-      data: event.attendees[attendeeIndex]
-    });
-  } catch (error) {
-    console.error('Respond to event error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
-
-// @desc    Upload event attachments
-// @route   POST /api/calendar/:id/attachments
-// @access  Private (Event creator, Admin)
-router.post('/:id/attachments', protect, uploadCalendarAttachments, handleUploadError, async (req, res) => {
-  try {
-    const event = await Calendar.findById(req.params.id);
-
-    if (!event) {
-      return res.status(404).json({
-        success: false,
-        message: 'Event not found'
-      });
-    }
-
-    // Check if user can upload attachments
-    if (event.createdBy.toString() !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to upload attachments for this event'
-      });
-    }
-
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'No files uploaded'
-      });
-    }
-
-    // Add attachments
-    const attachments = req.files.map(file => getFileInfo(file));
-    event.attachments.push(...attachments);
-    await event.save();
-
-    res.json({
-      success: true,
-      message: 'Attachments uploaded successfully',
-      data: attachments
-    });
-  } catch (error) {
-    console.error('Upload event attachments error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'

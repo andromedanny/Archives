@@ -4,6 +4,8 @@ import { Helmet } from 'react-helmet-async';
 import Header from '../../components/Layout/Header';
 import Footer from '../../components/Layout/Footer';
 import BackgroundImage from '../../components/UI/BackgroundImage';
+import { usersAPI, thesisAPI } from '../../services/api';
+import toast from 'react-hot-toast';
 
 const Researchers = () => {
   const [researchers, setResearchers] = useState([]);
@@ -15,71 +17,58 @@ const Researchers = () => {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Mock data - replace with actual API call
-  useEffect(() => {
-    const mockResearchers = [
-      {
-        id: 1,
-        name: "John Doe",
-        course: "BSCS",
-        year: "2023",
-        thesisCount: 2,
-        theses: [
-          {
-            id: 1,
-            title: "Machine Learning Applications in Healthcare",
-            year: "2023"
-          },
-          {
-            id: 2,
-            title: "AI-Powered Diagnostic Systems",
-            year: "2022"
-          }
-        ]
-      },
-      {
-        id: 2,
-        name: "Jane Smith",
-        course: "BSIT",
-        year: "2023",
-        thesisCount: 1,
-        theses: [
-          {
-            id: 3,
-            title: "Web Development Best Practices",
-            year: "2023"
-          }
-        ]
-      },
-      {
-        id: 3,
-        name: "Alice Johnson",
-        course: "BSEMC",
-        year: "2022",
-        thesisCount: 3,
-        theses: [
-          {
-            id: 4,
-            title: "Game Development Using Unity",
-            year: "2022"
-          },
-          {
-            id: 5,
-            title: "Virtual Reality Applications",
-            year: "2021"
-          },
-          {
-            id: 6,
-            title: "Mobile Game Design Patterns",
-            year: "2020"
-          }
-        ]
+  const fetchResearchers = async () => {
+    try {
+      setIsLoading(true);
+      // Fetch users who have submitted theses (students, faculty, prof)
+      const usersResponse = await usersAPI.getUsers({ role: ['student', 'faculty', 'prof'] });
+      const thesesResponse = await thesisAPI.getTheses();
+      
+      if (usersResponse.data.success && thesesResponse.data.success) {
+        const users = usersResponse.data.data || [];
+        const theses = thesesResponse.data.data || [];
+        
+        // Group theses by author and create researcher objects
+        const researchersData = users.map(user => {
+          const userTheses = theses.filter(t => 
+            t.authors?.includes(`${user.firstName} ${user.lastName}`) ||
+            t.adviser?.id === user.id
+          );
+          
+          return {
+            id: user.id,
+            name: `${user.firstName} ${user.lastName}`,
+            course: user.department || '',
+            year: user.createdAt ? new Date(user.createdAt).getFullYear() : '',
+            thesisCount: userTheses.length,
+            theses: userTheses.map(t => ({
+              id: t.id,
+              title: t.title,
+              year: t.academic_year || new Date(t.submitted_at || t.createdAt).getFullYear()
+            }))
+          };
+        }).filter(r => r.thesisCount > 0); // Only show researchers with theses
+        
+        setResearchers(researchersData);
+        setFilteredResearchers(researchersData);
+      } else {
+        setResearchers([]);
+        setFilteredResearchers([]);
       }
-    ];
-    
-    setResearchers(mockResearchers);
-    setFilteredResearchers(mockResearchers);
-    setIsLoading(false);
+    } catch (error) {
+      console.error('Error fetching researchers:', error);
+      setResearchers([]);
+      setFilteredResearchers([]);
+      if (error.response?.status !== 401) {
+        toast.error('Failed to load researchers');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchResearchers();
   }, []);
 
   // Filter researchers based on current filters
@@ -120,13 +109,13 @@ const Researchers = () => {
       <BackgroundImage />
       <Header />
       
-      <main className="min-h-screen pt-16 pb-20">
-        <div className="w-11/12 max-w-6xl mx-auto mt-8">
+      <main className="min-h-screen pt-16 pb-20" style={{ position: 'relative', zIndex: 1 }}>
+        <div className="w-11/12 max-w-7xl mx-auto mt-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg"
+            className="bg-white p-6 rounded-xl shadow-lg border border-gray-100"
           >
             <h1 className="text-3xl font-bold text-gray-800 mb-6">Researchers</h1>
             

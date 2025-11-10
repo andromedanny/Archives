@@ -1,0 +1,60 @@
+warning: in the working copy of 'backend/config/database.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/models/Calendar.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/models/Department.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/models/Thesis.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/models/index.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/package-lock.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/package.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/routes/auth.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/server.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/components/Layout/Header.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/Admin/AdminDepartments.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/Admin/AdminUsers.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/Auth/Register.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/Dashboard/Dashboard.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/Thesis/ThesisCreate.js', LF will be replaced by CRLF the next time Git touches it
+ backend/config/database.js                     | 113 [32m+++[m[31m-[m
+ backend/create-tables.sql                      | 216 [31m-------[m
+ backend/middleware/auth.js                     |  10 [32m+[m[31m-[m
+ backend/middleware/upload.js                   |  35 [32m+[m[31m-[m
+ backend/models/Calendar.js                     |  44 [32m+[m[31m-[m
+ backend/models/Department.js                   |  13 [32m+[m[31m-[m
+ backend/models/Thesis.js                       |  68 [32m++[m[31m-[m
+ backend/models/User.js                         |  35 [32m+[m[31m-[m
+ backend/models/index.js                        |  54 [32m+[m[31m-[m
+ backend/package-lock.json                      | 273 [32m+++++++++[m
+ backend/package.json                           |   7 [32m+[m[31m-[m
+ backend/routes/admin.js                        | 518 [32m+++++++++++++[m[31m----[m
+ backend/routes/auth.js                         | 109 [32m+++[m[31m-[m
+ backend/routes/calendar.js                     | 467 [32m+++++++++[m[31m-------[m
+ backend/routes/dashboard.js                    | 228 [32m+++++[m[31m---[m
+ backend/routes/thesis.js                       | 744 [32m++++++++++++++++++[m[31m-------[m
+ backend/routes/users.js                        | 419 [32m++++++++++[m[31m----[m
+ backend/server.js                              |  19 [32m+[m[31m-[m
+ backend/setup-mysql.sql                        | 150 [31m-----[m
+ frontend/src/components/Auth/ProtectedRoute.js | 162 [32m++++[m[31m--[m
+ frontend/src/components/Layout/AuthLayout.js   |  16 [32m+[m[31m-[m
+ frontend/src/components/Layout/Footer.js       |  16 [32m+[m[31m-[m
+ frontend/src/components/Layout/Header.js       |  15 [32m+[m[31m-[m
+ frontend/src/components/UI/BackgroundImage.js  |  10 [32m+[m[31m-[m
+ frontend/src/contexts/AuthContext.js           |  45 [32m+[m[31m-[m
+ frontend/src/pages/Admin/AdminAnalytics.js     | 112 [32m++[m[31m--[m
+ frontend/src/pages/Admin/AdminDashboard.js     | 504 [32m++++++++++++[m[31m-----[m
+ frontend/src/pages/Admin/AdminDepartments.js   | 437 [32m+++++[m[31m----------[m
+ frontend/src/pages/Admin/AdminTheses.js        | 602 [32m++++++++++++[m[31m--------[m
+ frontend/src/pages/Admin/AdminUsers.js         | 247 [32m++++[m[31m----[m
+ frontend/src/pages/Auth/ForgotPassword.js      |   8 [32m+[m[31m-[m
+ frontend/src/pages/Auth/Login.js               |  45 [32m+[m[31m-[m
+ frontend/src/pages/Auth/Register.js            | 370 [32m++++++++[m[31m----[m
+ frontend/src/pages/Calendar/Calendar.js        | 519 [32m+++++++[m[31m----------[m
+ frontend/src/pages/Dashboard/Dashboard.js      | 430 [32m+++++++[m[31m-------[m
+ frontend/src/pages/Thesis/MyTheses.js          | 241 [32m+++++[m[31m---[m
+ frontend/src/pages/Thesis/ThesisCreate.js      | 594 [32m+++++++++++++++++[m[31m---[m
+ frontend/src/pages/Thesis/ThesisDetail.js      | 247 [32m++++++[m[31m--[m
+ frontend/src/pages/Thesis/ThesisEdit.js        | 288 [32m++++++[m[31m----[m
+ frontend/src/pages/Thesis/ThesisList.js        | 366 [32m+++++++[m[31m-----[m
+ frontend/src/pages/User/Profile.js             | 207 [32m++++[m[31m---[m
+ frontend/src/pages/User/Researchers.js         | 123 [32m++[m[31m--[m
+ frontend/src/pages/User/Settings.js            | 423 [32m+++++++[m[31m-------[m
+ frontend/src/services/api.js                   |  60 [32m+[m[31m-[m
+ 44 files changed, 6083 insertions(+), 3526 deletions(-)

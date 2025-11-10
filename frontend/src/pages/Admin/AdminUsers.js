@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
+import { useSearchParams } from 'react-router-dom';
 import Header from '../../components/Layout/Header';
 import Footer from '../../components/Layout/Footer';
 import BackgroundImage from '../../components/UI/BackgroundImage';
+import { usersAPI, departmentsAPI } from '../../services/api';
+import toast from 'react-hot-toast';
 import { 
   PencilIcon, 
   TrashIcon, 
@@ -14,11 +17,13 @@ import {
 } from '@heroicons/react/24/outline';
 
 const AdminUsers = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [departments, setDepartments] = useState([]);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -30,62 +35,51 @@ const AdminUsers = () => {
     isActive: true
   });
 
+  // Check URL parameter to open add modal
   useEffect(() => {
-    // Mock data - replace with actual API call
-    const mockUsers = [
-      {
-        id: 1,
-        firstName: 'John',
-        lastName: 'Doe',
-        email: 'john.doe@example.com',
-        role: 'student',
-        department: 'Computer Science',
-        studentId: 'CS2023-001',
-        phone: '+63 912 345 6789',
-        joinDate: '2023-01-15',
-        isActive: true
-      },
-      {
-        id: 2,
-        firstName: 'Jane',
-        lastName: 'Smith',
-        email: 'jane.smith@example.com',
-        role: 'faculty',
-        department: 'Information Technology',
-        studentId: '',
-        phone: '+63 912 345 6790',
-        joinDate: '2022-08-20',
-        isActive: true
-      },
-      {
-        id: 3,
-        firstName: 'Dr. Alice',
-        lastName: 'Johnson',
-        email: 'alice.johnson@example.com',
-        role: 'admin',
-        department: 'Entertainment and Multimedia Computing',
-        studentId: '',
-        phone: '+63 912 345 6791',
-        joinDate: '2021-06-10',
-        isActive: true
-      },
-      {
-        id: 4,
-        firstName: 'Bob',
-        lastName: 'Wilson',
-        email: 'bob.wilson@example.com',
-        role: 'student',
-        department: 'Computer Science',
-        studentId: 'CS2023-002',
-        phone: '+63 912 345 6792',
-        joinDate: '2023-02-10',
-        isActive: false
+    const action = searchParams.get('action');
+    if (action === 'create') {
+      setShowAddModal(true);
+      // Remove the query parameter from URL
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  const fetchUsers = async () => {
+    try {
+      setIsLoading(true);
+      const response = await usersAPI.getUsers();
+      if (response.data.success) {
+        setUsers(response.data.data || []);
+      } else {
+        setUsers([]);
       }
-    ];
-    
-    setUsers(mockUsers);
-    setIsLoading(false);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      setUsers([]);
+      if (error.response?.status !== 401) {
+        toast.error('Failed to load users');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+    fetchDepartments();
   }, []);
+
+  const fetchDepartments = async () => {
+    try {
+      const response = await departmentsAPI.getDepartments();
+      if (response.data.success) {
+        setDepartments(response.data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+    }
+  };
 
   const handleEdit = (user) => {
     setEditingUser(user);
@@ -117,41 +111,92 @@ const AdminUsers = () => {
     setShowAddModal(true);
   };
 
-  const handleSave = () => {
-    if (editingUser) {
-      // Update existing user
-      setUsers(users.map(user => 
-        user.id === editingUser.id 
-          ? { ...user, ...formData, fullName: `${formData.firstName} ${formData.lastName}` }
-          : user
-      ));
-      setShowEditModal(false);
-    } else {
-      // Add new user
-      const newUser = {
-        id: users.length + 1,
-        ...formData,
-        fullName: `${formData.firstName} ${formData.lastName}`,
-        joinDate: new Date().toISOString().split('T')[0]
-      };
-      setUsers([...users, newUser]);
-      setShowAddModal(false);
+  const handleSave = async () => {
+    try {
+      if (editingUser) {
+        // Update existing user
+        await usersAPI.updateUser(editingUser.id, formData);
+        toast.success('User updated successfully');
+        setShowEditModal(false);
+        fetchUsers();
+      } else {
+        // Add new user
+        await usersAPI.createUser(formData);
+        toast.success('User created successfully');
+        setShowAddModal(false);
+        fetchUsers();
+      }
+      setFormData({
+        firstName: '',
+        lastName: '',
+        email: '',
+        role: 'student',
+        department: '',
+        studentId: '',
+        phone: '',
+        isActive: true
+      });
+      setEditingUser(null);
+    } catch (error) {
+      console.error('Error saving user:', error);
+      toast.error(error.response?.data?.message || 'Failed to save user');
     }
-    setEditingUser(null);
   };
 
-  const handleDelete = (userId) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
-      setUsers(users.filter(user => user.id !== userId));
+  const handleDelete = async (userId, forceDelete = false) => {
+    const user = users.find(u => u.id === userId);
+    const userName = user ? `${user.firstName} ${user.lastName}` : 'this user';
+    
+    let confirmMessage = `Are you sure you want to delete ${userName}?`;
+    if (forceDelete) {
+      confirmMessage = `Are you sure you want to delete ${userName} and ALL their uploaded theses? This action cannot be undone.`;
+    }
+    
+    if (window.confirm(confirmMessage)) {
+      try {
+        const url = forceDelete ? `${userId}?force=true` : userId;
+        await usersAPI.deleteUser(url);
+        toast.success(forceDelete ? 'User and their theses deleted successfully' : 'User deleted successfully');
+        fetchUsers();
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        const errorMessage = error.response?.data?.message || 'Failed to delete user';
+        const errorData = error.response?.data;
+        
+        // Show error with detailed message and offer force delete option
+        if (error.response?.status === 400 && (errorMessage.includes('thesis') || errorMessage.includes('adviser')) && errorData?.canForceDelete) {
+          const confirmMessage = errorMessage.includes('adviser') 
+            ? `${errorMessage}\n\nWould you like to delete this user and remove them as adviser from all theses?`
+            : `${errorMessage}\n\nWould you like to delete this user and all their theses?`;
+          
+          const shouldForceDelete = window.confirm(confirmMessage);
+          
+          if (shouldForceDelete) {
+            handleDelete(userId, true);
+          }
+        } else {
+          toast.error(errorMessage, {
+            duration: 6000,
+            style: {
+              maxWidth: '500px',
+              whiteSpace: 'pre-wrap'
+            }
+          });
+        }
+      }
     }
   };
 
-  const handleToggleStatus = (userId) => {
-    setUsers(users.map(user => 
-      user.id === userId 
-        ? { ...user, isActive: !user.isActive }
-        : user
-    ));
+  const handleToggleStatus = async (userId) => {
+    try {
+      const user = users.find(u => u.id === userId);
+      await usersAPI.updateUser(userId, { isActive: !user.isActive });
+      toast.success(`User ${!user.isActive ? 'activated' : 'deactivated'} successfully`);
+      fetchUsers();
+    } catch (error) {
+      console.error('Error toggling user status:', error);
+      toast.error(error.response?.data?.message || 'Failed to update user status');
+    }
   };
 
   const handleInputChange = (e) => {
@@ -172,19 +217,19 @@ const AdminUsers = () => {
       <BackgroundImage />
       <Header />
       
-      <main className="min-h-screen pt-16 pb-20">
-        <div className="w-11/12 max-w-6xl mx-auto mt-8">
+      <main className="min-h-screen pt-16 pb-20" style={{ position: 'relative', zIndex: 1 }}>
+        <div className="w-11/12 max-w-7xl mx-auto mt-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg"
+            className="bg-white p-6 rounded-xl shadow-lg border border-gray-100"
           >
             <div className="flex justify-between items-center mb-6">
               <h1 className="text-3xl font-bold text-gray-800">Manage Users</h1>
               <button 
                 onClick={handleAddNew}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
               >
                 Add New User
               </button>
@@ -195,11 +240,21 @@ const AdminUsers = () => {
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
                 <p className="mt-4 text-gray-600">Loading users...</p>
               </div>
+            ) : users.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-500 text-lg">No users found</p>
+                <button 
+                  onClick={handleAddNew}
+                  className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Add First User
+                </button>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
                   <thead>
-                    <tr className="bg-gray-50">
+                    <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Name</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Email</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Role</th>
@@ -454,10 +509,11 @@ const AdminUsers = () => {
                       }}
                     >
                       <option value="">Select Department</option>
-                      <option value="Computer Science">Computer Science</option>
-                      <option value="Information Technology">Information Technology</option>
-                      <option value="Entertainment and Multimedia Computing">Entertainment and Multimedia Computing</option>
-                      <option value="Information Systems">Information Systems</option>
+                      {departments.filter(d => d.is_active).map((dept) => (
+                        <option key={dept.id} value={dept.name}>
+                          {dept.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -714,10 +770,11 @@ const AdminUsers = () => {
                       }}
                     >
                       <option value="">Select Department</option>
-                      <option value="Computer Science">Computer Science</option>
-                      <option value="Information Technology">Information Technology</option>
-                      <option value="Entertainment and Multimedia Computing">Entertainment and Multimedia Computing</option>
-                      <option value="Information Systems">Information Systems</option>
+                      {departments.filter(d => d.is_active).map((dept) => (
+                        <option key={dept.id} value={dept.name}>
+                          {dept.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

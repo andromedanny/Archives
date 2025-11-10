@@ -24,16 +24,16 @@ const Calendar = sequelize.define('Calendar', {
     type: DataTypes.TEXT,
     allowNull: true
   },
-  eventType: {
+  event_type: {
     type: DataTypes.ENUM('thesis_submission', 'thesis_defense', 'title_defense', 'meeting', 'deadline', 'other'),
     allowNull: false,
     defaultValue: 'other'
   },
-  eventDate: {
+  event_date: {
     type: DataTypes.DATE,
     allowNull: false
   },
-  endDate: {
+  end_date: {
     type: DataTypes.DATE,
     allowNull: true
   },
@@ -45,7 +45,7 @@ const Calendar = sequelize.define('Calendar', {
     type: DataTypes.STRING,
     allowNull: true
   },
-  thesisId: {
+  thesis_id: {
     type: DataTypes.INTEGER,
     allowNull: true,
     references: {
@@ -53,7 +53,7 @@ const Calendar = sequelize.define('Calendar', {
       key: 'id'
     }
   },
-  organizerId: {
+  organizer_id: {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
@@ -66,15 +66,15 @@ const Calendar = sequelize.define('Calendar', {
     allowNull: true,
     defaultValue: []
   },
-  isRecurring: {
+  is_recurring: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
   },
-  recurrencePattern: {
+  recurrence_pattern: {
     type: DataTypes.JSON,
     allowNull: true
   },
-  isPublic: {
+  is_public: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
   },
@@ -90,29 +90,29 @@ const Calendar = sequelize.define('Calendar', {
 }, {
   tableName: 'calendar_events',
   indexes: [
-    { fields: ['eventDate'] },
-    { fields: ['eventType'] },
+    { fields: ['event_date'] },
+    { fields: ['event_type'] },
     { fields: ['department'] },
-    { fields: ['thesisId'] },
-    { fields: ['organizerId'] },
+    { fields: ['thesis_id'] },
+    { fields: ['organizer_id'] },
     { fields: ['status'] },
-    { fields: ['isPublic'] }
+    { fields: ['is_public'] }
   ]
 });
 
 // Instance methods
 Calendar.prototype.isUpcoming = function() {
-  return new Date(this.eventDate) > new Date();
+  return new Date(this.event_date) > new Date();
 };
 
 Calendar.prototype.isPast = function() {
-  return new Date(this.eventDate) < new Date();
+  return new Date(this.event_date) < new Date();
 };
 
 Calendar.prototype.getDuration = function() {
-  if (this.endDate) {
-    const start = new Date(this.eventDate);
-    const end = new Date(this.endDate);
+  if (this.end_date) {
+    const start = new Date(this.event_date);
+    const end = new Date(this.end_date);
     return Math.round((end - start) / (1000 * 60)); // Duration in minutes
   }
   return null;
@@ -121,7 +121,7 @@ Calendar.prototype.getDuration = function() {
 // Static methods
 Calendar.getUpcomingEvents = async function(limit = 10, department = null) {
   const whereClause = {
-    eventDate: {
+    event_date: {
       [require('sequelize').Op.gte]: new Date()
     },
     status: 'scheduled'
@@ -133,7 +133,7 @@ Calendar.getUpcomingEvents = async function(limit = 10, department = null) {
 
   return await this.findAll({
     where: whereClause,
-    order: [['eventDate', 'ASC']],
+    order: [['event_date', 'ASC']],
     limit,
     include: [
       {
@@ -147,7 +147,7 @@ Calendar.getUpcomingEvents = async function(limit = 10, department = null) {
 
 Calendar.getEventsByDateRange = async function(startDate, endDate, department = null) {
   const whereClause = {
-    eventDate: {
+    event_date: {
       [require('sequelize').Op.between]: [startDate, endDate]
     }
   };
@@ -158,7 +158,7 @@ Calendar.getEventsByDateRange = async function(startDate, endDate, department = 
 
   return await this.findAll({
     where: whereClause,
-    order: [['eventDate', 'ASC']],
+    order: [['event_date', 'ASC']],
     include: [
       {
         model: sequelize.models.User,

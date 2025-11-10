@@ -144,9 +144,39 @@ const deleteFile = (filePath) => {
   }
 };
 
+// Helper function to calculate file checksum (SHA256) for integrity verification
+const calculateChecksum = (filePath) => {
+  const crypto = require('crypto');
+  const fs = require('fs');
+  
+  try {
+    const fileBuffer = fs.readFileSync(filePath);
+    const hashSum = crypto.createHash('sha256');
+    hashSum.update(fileBuffer);
+    return hashSum.digest('hex');
+  } catch (error) {
+    console.error('Error calculating checksum:', error);
+    return null;
+  }
+};
+
+// Helper function to verify file integrity
+const verifyFileIntegrity = (filePath, expectedChecksum) => {
+  if (!expectedChecksum) return true; // No checksum to verify
+  
+  const actualChecksum = calculateChecksum(filePath);
+  return actualChecksum === expectedChecksum;
+};
+
 // Helper function to get file info
 const getFileInfo = (file) => {
   if (!file) return null;
+  
+  // Calculate checksum for file integrity (Objective 1.4)
+  let checksum = null;
+  if (file.path) {
+    checksum = calculateChecksum(file.path);
+  }
   
   return {
     filename: file.filename,
@@ -154,6 +184,7 @@ const getFileInfo = (file) => {
     path: file.path,
     size: file.size,
     mimetype: file.mimetype,
+    checksum: checksum, // SHA256 checksum for integrity verification
     uploadedAt: new Date()
   };
 };
@@ -166,5 +197,7 @@ module.exports = {
   uploadCalendarAttachments,
   handleUploadError,
   deleteFile,
-  getFileInfo
+  getFileInfo,
+  calculateChecksum,
+  verifyFileIntegrity
 };

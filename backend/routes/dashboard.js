@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Thesis, User, Department, Calendar } = require('../models');
+const { Thesis, User, Department, Calendar, Course } = require('../models');
 const { protect } = require('../middleware/auth');
 
 // Test route to verify server is working
@@ -100,6 +100,7 @@ router.get('/stats', protect, async (req, res) => {
 
     if (userRole === 'admin') {
       // Admin statistics
+      const Op = require('sequelize').Op;
       const [
         totalTheses,
         totalUsers,
@@ -109,20 +110,20 @@ router.get('/stats', protect, async (req, res) => {
         pendingReviews
       ] = await Promise.all([
         Thesis.count(),
-        User.count({ where: { isActive: true } }),
-        Department.count({ where: { isActive: true } }),
+        User.count({ where: { is_active: true } }),
+        Department.count({ where: { is_active: true } }),
         Thesis.count({
           where: {
-            submittedAt: {
-              [require('sequelize').Op.gte]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+            submitted_at: {
+              [Op.gte]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
             }
           }
         }),
         Thesis.count({
           where: {
             status: 'Published',
-            publishedAt: {
-              [require('sequelize').Op.gte]: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+            published_at: {
+              [Op.gte]: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
             }
           }
         }),
@@ -138,7 +139,17 @@ router.get('/stats', protect, async (req, res) => {
         pendingReviews
       };
     } else {
-      // User statistics
+      // User statistics - count theses where user is an author
+      const { ThesisAuthors } = require('../models');
+      
+      // Get all thesis IDs where user is an author
+      const authoredTheses = await ThesisAuthors.findAll({
+        where: { user_id: userId },
+        attributes: ['thesis_id']
+      });
+      
+      const thesisIds = authoredTheses.map(at => at.thesis_id);
+      
       const [
         myTheses,
         publishedTheses,
@@ -146,25 +157,33 @@ router.get('/stats', protect, async (req, res) => {
         totalDownloads,
         pendingReviews
       ] = await Promise.all([
-        Thesis.count({ where: { adviserId: userId } }),
-        Thesis.count({ 
+        thesisIds.length > 0 ? Thesis.count({ 
           where: { 
-            adviserId: userId,
+            id: { [require('sequelize').Op.in]: thesisIds } 
+          } 
+        }) : 0,
+        thesisIds.length > 0 ? Thesis.count({ 
+          where: { 
+            id: { [require('sequelize').Op.in]: thesisIds },
             status: 'Published'
           } 
-        }),
-        Thesis.sum('viewCount', { 
-          where: { adviserId: userId } 
-        }) || 0,
-        Thesis.sum('downloadCount', { 
-          where: { adviserId: userId } 
-        }) || 0,
-        Thesis.count({ 
+        }) : 0,
+        thesisIds.length > 0 ? Thesis.sum('view_count', { 
           where: { 
-            adviserId: userId,
+            id: { [require('sequelize').Op.in]: thesisIds } 
+          } 
+        }) || 0 : 0,
+        thesisIds.length > 0 ? Thesis.sum('download_count', { 
+          where: { 
+            id: { [require('sequelize').Op.in]: thesisIds } 
+          } 
+        }) || 0 : 0,
+        thesisIds.length > 0 ? Thesis.count({ 
+          where: { 
+            id: { [require('sequelize').Op.in]: thesisIds },
             status: 'Under Review'
           } 
-        })
+        }) : 0
       ]);
 
       stats = {
@@ -176,10 +195,16 @@ router.get('/stats', protect, async (req, res) => {
       };
     }
 
-    res.json(stats);
+    res.json({
+      success: true,
+      data: stats
+    });
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
-    res.status(500).json({ error: 'Failed to fetch dashboard statistics' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch dashboard statistics' 
+    });
   }
 });
 
@@ -193,11 +218,12 @@ router.get('/activity', protect, async (req, res) => {
 
     if (userRole === 'admin') {
       // Admin activity - recent thesis submissions and user registrations
+      const Op = require('sequelize').Op;
       const [recentTheses, recentUsers] = await Promise.all([
         Thesis.findAll({
           where: {
-            submittedAt: {
-              [require('sequelize').Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+            submitted_at: {
+              [Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
             }
           },
           include: [{
@@ -205,13 +231,13 @@ router.get('/activity', protect, async (req, res) => {
             as: 'adviser',
             attributes: ['firstName', 'lastName']
           }],
-          order: [['submittedAt', 'DESC']],
+          order: [['submitted_at', 'DESC']],
           limit: 10
         }),
         User.findAll({
           where: {
             createdAt: {
-              [require('sequelize').Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+              [Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
             }
           },
           order: [['createdAt', 'DESC']],
@@ -221,12 +247,14 @@ router.get('/activity', protect, async (req, res) => {
 
       activities = [
         ...recentTheses.map(thesis => ({
+          id: thesis.id,
           type: 'thesis',
           title: `New thesis submitted: "${thesis.title}"`,
-          date: thesis.submittedAt,
-          author: `${thesis.adviser.firstName} ${thesis.adviser.lastName}`
+          date: thesis.submitted_at || thesis.createdAt,
+          author: thesis.adviser ? `${thesis.adviser.firstName} ${thesis.adviser.lastName}` : 'Unknown'
         })),
         ...recentUsers.map(user => ({
+          id: user.id,
           type: 'user',
           title: `New user registered: ${user.firstName} ${user.lastName}`,
           date: user.createdAt,
@@ -235,24 +263,32 @@ router.get('/activity', protect, async (req, res) => {
       ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
     } else {
       // User activity - their own thesis submissions and status changes
+      const Op = require('sequelize').Op;
       const recentTheses = await Thesis.findAll({
-        where: { adviserId: userId },
-        order: [['submittedAt', 'DESC']],
+        where: { adviser_id: userId },
+        order: [['submitted_at', 'DESC']],
         limit: 10
       });
 
       activities = recentTheses.map(thesis => ({
+        id: thesis.id,
         type: 'thesis',
         title: `Thesis "${thesis.title}" status: ${thesis.status}`,
-        date: thesis.submittedAt,
+        date: thesis.submitted_at || thesis.createdAt,
         status: thesis.status
       }));
     }
 
-    res.json(activities);
+    res.json({
+      success: true,
+      data: activities
+    });
   } catch (error) {
     console.error('Error fetching recent activity:', error);
-    res.status(500).json({ error: 'Failed to fetch recent activity' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch recent activity' 
+    });
   }
 });
 
@@ -261,18 +297,36 @@ router.get('/my-theses', protect, async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = parseInt(req.query.limit) || 5;
+    const { ThesisAuthors } = require('../models');
+    const { Op } = require('sequelize');
 
-    const theses = await Thesis.findAll({
-      where: { adviserId: userId },
-      order: [['submittedAt', 'DESC']],
-      limit,
-      attributes: ['id', 'title', 'status', 'submittedAt', 'viewCount', 'downloadCount']
+    // Get thesis IDs where user is an author
+    const authoredTheses = await ThesisAuthors.findAll({
+      where: { user_id: userId },
+      attributes: ['thesis_id']
     });
+    
+    const thesisIds = authoredTheses.map(at => at.thesis_id);
+    
+    const theses = thesisIds.length > 0 ? await Thesis.findAll({
+      where: { 
+        id: { [Op.in]: thesisIds } 
+      },
+      order: [['submitted_at', 'DESC']],
+      limit,
+      attributes: ['id', 'title', 'status', 'submitted_at', 'view_count', 'download_count']
+    }) : [];
 
-    res.json(theses);
+    res.json({
+      success: true,
+      data: theses
+    });
   } catch (error) {
     console.error('Error fetching user theses:', error);
-    res.status(500).json({ error: 'Failed to fetch user theses' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch user theses' 
+    });
   }
 });
 
@@ -287,43 +341,53 @@ router.get('/upcoming-events', protect, async (req, res) => {
 
     if (userRole === 'admin') {
       // Admin sees all upcoming events
+      const Op = require('sequelize').Op;
       events = await Calendar.findAll({
         where: {
-          eventDate: {
-            [require('sequelize').Op.gte]: new Date()
+          event_date: {
+            [Op.gte]: new Date()
           }
         },
-        order: [['eventDate', 'ASC']],
+        order: [['event_date', 'ASC']],
         limit
       });
     } else {
       // Users see events related to their department or theses
+      const Op = require('sequelize').Op;
+      const userThesisIds = await Thesis.findAll({
+        where: { adviser_id: userId },
+        attributes: ['id']
+      }).then(results => results.map(t => t.id));
+      
       events = await Calendar.findAll({
         where: {
-          eventDate: {
-            [require('sequelize').Op.gte]: new Date()
+          event_date: {
+            [Op.gte]: new Date()
           },
-          [require('sequelize').Op.or]: [
+          [Op.or]: [
             { department: req.user.department },
-            { 
-              thesisId: {
-                [require('sequelize').Op.in]: await Thesis.findAll({
-                  where: { adviserId: userId },
-                  attributes: ['id']
-                }).then(results => results.map(t => t.id))
+            ...(userThesisIds.length > 0 ? [{
+              thesis_id: {
+                [Op.in]: userThesisIds
               }
-            }
+            }] : [])
           ]
         },
-        order: [['eventDate', 'ASC']],
+        order: [['event_date', 'ASC']],
         limit
       });
     }
 
-    res.json(events);
+    res.json({
+      success: true,
+      data: events
+    });
   } catch (error) {
     console.error('Error fetching upcoming events:', error);
-    res.status(500).json({ error: 'Failed to fetch upcoming events' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch upcoming events' 
+    });
   }
 });
 
@@ -331,11 +395,12 @@ router.get('/upcoming-events', protect, async (req, res) => {
 router.get('/department-stats', protect, async (req, res) => {
   try {
     const userDepartment = req.user.department;
+    const Op = require('sequelize').Op;
 
     const [departmentInfo, thesisCount, userCount] = await Promise.all([
       Department.findOne({ where: { name: userDepartment } }),
       Thesis.count({ where: { department: userDepartment } }),
-      User.count({ where: { department: userDepartment, isActive: true } })
+      User.count({ where: { department: userDepartment, is_active: true } })
     ]);
 
     const stats = {
@@ -345,17 +410,56 @@ router.get('/department-stats', protect, async (req, res) => {
       recentSubmissions: await Thesis.count({
         where: {
           department: userDepartment,
-          submittedAt: {
-            [require('sequelize').Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          submitted_at: {
+            [Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
           }
         }
       })
     };
 
-    res.json(stats);
+    res.json({
+      success: true,
+      data: stats
+    });
   } catch (error) {
     console.error('Error fetching department stats:', error);
-    res.status(500).json({ error: 'Failed to fetch department statistics' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch department statistics' 
+    });
+  }
+});
+
+// @desc    Get all departments (accessible to all authenticated users)
+// @route   GET /api/dashboard/departments
+// @access  Private
+router.get('/departments', protect, async (req, res) => {
+  try {
+    const departments = await Department.findAll({
+      where: { is_active: true },
+      include: [{
+        model: Course,
+        as: 'courses',
+        required: false,
+        attributes: ['id', 'name', 'code', 'level', 'is_active'],
+        where: { is_active: true }
+      }],
+      order: [['name', 'ASC']]
+    });
+
+    res.json({
+      success: true,
+      count: departments.length,
+      data: departments
+    });
+  } catch (error) {
+    console.error('Get departments error:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 

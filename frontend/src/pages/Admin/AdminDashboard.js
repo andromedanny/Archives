@@ -23,6 +23,7 @@ import {
   CheckIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline';
+import { adminAPI } from '../../services/api';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
@@ -48,6 +49,15 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     fetchDashboardData();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Add error boundary effect
+  useEffect(() => {
+    const handleError = (error) => {
+      console.error('AdminDashboard error:', error);
+    };
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
   }, []);
 
   const fetchDashboardData = async () => {
@@ -166,38 +176,94 @@ const AdminDashboard = () => {
         }
       ];
       
-      setStats(mockStats);
-      setDashboardData({
-        recentActivity: mockActivity,
-        recentTheses: mockRecentTheses,
-        upcomingEvents: mockEvents,
-        pendingReviews: mockPendingReviews
-      });
-      setIsLoading(false);
+      // Fetch real data from API
+      const response = await adminAPI.getDashboard();
+      const data = response.data;
+      
+      if (data.success) {
+        setStats(data.stats || {
+          totalTheses: 0,
+          totalUsers: 0,
+          totalDepartments: 0,
+          recentSubmissions: 0
+        });
+        setDashboardData({
+          recentActivity: data.recentActivity || [],
+          recentTheses: data.recentTheses || [],
+          upcomingEvents: data.upcomingEvents || [],
+          pendingReviews: data.pendingReviews || []
+        });
+      }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      
+      // Show user-friendly error message
+      if (error.response) {
+        // Server responded with error status
+        console.error('Server error:', error.response.status, error.response.data);
+        if (error.response.status === 500) {
+          console.error('Server error details:', error.response.data);
+        }
+      } else if (error.request) {
+        // Request was made but no response received - backend might not be running
+        console.error('Network error: No response from server.');
+        console.error('Please ensure the backend server is running on port 5000.');
+        console.error('To start the backend, run: cd backend && npm start');
+        // Don't show toast for network errors on initial load to avoid spam
+      } else {
+        // Something else happened
+        console.error('Error:', error.message);
+      }
+      
+      // Set empty data on error
+      setStats({
+        totalTheses: 0,
+        totalUsers: 0,
+        totalDepartments: 0,
+        recentSubmissions: 0
+      });
+      setDashboardData({
+        recentActivity: [],
+        recentTheses: [],
+        upcomingEvents: [],
+        pendingReviews: []
+      });
+    } finally {
       setIsLoading(false);
     }
   };
 
   // Utility functions
   const formatTimeAgo = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInSeconds = Math.floor((now - date) / 1000);
-    
-    if (diffInSeconds < 60) return 'Just now';
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
-    return `${Math.floor(diffInSeconds / 86400)} days ago`;
+    if (!dateString) return 'Never';
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      if (isNaN(date.getTime())) return 'Never';
+      const diffInSeconds = Math.floor((now - date) / 1000);
+      
+      if (diffInSeconds < 60) return 'Just now';
+      if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
+      if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+      return `${Math.floor(diffInSeconds / 86400)} days ago`;
+    } catch (error) {
+      return 'Never';
+    }
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'N/A';
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch (error) {
+      return 'N/A';
+    }
   };
 
   // CRUD Handlers
@@ -253,6 +319,40 @@ const AdminDashboard = () => {
     }
   };
 
+  const getColorStyles = (color) => {
+    const colors = {
+      blue: {
+        text: '#2563eb',
+        bgLight: '#dbeafe',
+        bgMedium: '#bfdbfe',
+        bgDark: '#93c5fd',
+        border: '#bfdbfe'
+      },
+      green: {
+        text: '#16a34a',
+        bgLight: '#dcfce7',
+        bgMedium: '#bbf7d0',
+        bgDark: '#86efac',
+        border: '#bbf7d0'
+      },
+      purple: {
+        text: '#9333ea',
+        bgLight: '#f3e8ff',
+        bgMedium: '#e9d5ff',
+        bgDark: '#d8b4fe',
+        border: '#e9d5ff'
+      },
+      orange: {
+        text: '#ea580c',
+        bgLight: '#ffedd5',
+        bgMedium: '#fed7aa',
+        bgDark: '#fdba74',
+        border: '#fed7aa'
+      }
+    };
+    return colors[color] || colors.blue;
+  };
+
   if (isLoading) {
     return (
       <>
@@ -276,32 +376,34 @@ const AdminDashboard = () => {
       <BackgroundImage />
       <Header />
       
-      <main className="min-h-screen pt-16 pb-20">
+      <main className="min-h-screen pt-16 pb-20" style={{ position: 'relative', zIndex: 1 }}>
         <div className="w-11/12 max-w-7xl mx-auto mt-8">
           {/* Welcome Header */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg mb-8"
+            className="bg-gradient-to-r from-purple-600 to-purple-800 rounded-2xl shadow-2xl p-8 text-white mb-8"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <img 
-                  src="/faith logo.png" 
-                  alt="FAITH Colleges Logo" 
-                  className="h-16 w-auto"
-                />
+                <div className="bg-white/20 backdrop-blur-sm p-4 rounded-xl">
+                  <img 
+                    src="/faith logo.png" 
+                    alt="FAITH Colleges Logo" 
+                    className="h-16 w-auto"
+                  />
+                </div>
                 <div>
-                  <h1 className="text-3xl md:text-4xl font-bold text-gray-800">
+                  <h1 className="text-3xl md:text-4xl font-bold text-white">
                     Welcome back, {user?.firstName || 'Admin'}!
                   </h1>
-                  <p className="text-lg text-gray-600">Administrative Dashboard</p>
+                  <p className="text-lg text-purple-100">Administrative Dashboard</p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-sm text-gray-500">Last login: {formatTimeAgo(user?.lastLogin || new Date().toISOString())}</p>
-                <p className="text-sm text-gray-500">Department: {user?.department || 'Administration'}</p>
+              <div className="text-right bg-white/10 backdrop-blur-sm rounded-xl p-4">
+                <p className="text-sm text-purple-100">Last login: {formatTimeAgo(user?.lastLogin || new Date().toISOString())}</p>
+                <p className="text-sm text-purple-100">Department: {user?.department || 'Administration'}</p>
               </div>
             </div>
           </motion.div>
@@ -317,16 +419,21 @@ const AdminDashboard = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.1 }}
-              className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group"
+              className="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl border border-gray-100 hover:border-purple-200 transition-all duration-300 cursor-pointer group transform hover:-translate-y-1"
               onClick={() => navigate('/admin/theses')}
             >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600 mb-1">Total Theses</p>
-                  <p className="text-3xl font-bold text-blue-600">{stats.totalTheses}</p>
+                  <p style={{ color: getColorStyles('blue').text }} className="text-3xl font-bold">{stats.totalTheses}</p>
                 </div>
-                <div className="p-3 rounded-lg bg-blue-100 group-hover:bg-blue-200 transition-colors">
-                  <BookOpenIcon className="h-6 w-6 text-blue-600" />
+                <div 
+                  className="p-3 rounded-xl transition-all duration-300 transform group-hover:scale-110"
+                  style={{
+                    background: `linear-gradient(to bottom right, ${getColorStyles('blue').bgLight}, ${getColorStyles('blue').bgMedium})`
+                  }}
+                >
+                  <BookOpenIcon style={{ color: getColorStyles('blue').text }} className="h-6 w-6" />
                 </div>
               </div>
             </motion.div>
@@ -335,16 +442,21 @@ const AdminDashboard = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group"
+              className="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl border border-gray-100 hover:border-purple-200 transition-all duration-300 cursor-pointer group transform hover:-translate-y-1"
               onClick={() => navigate('/admin/users')}
             >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600 mb-1">Total Users</p>
-                  <p className="text-3xl font-bold text-green-600">{stats.totalUsers}</p>
+                  <p style={{ color: getColorStyles('green').text }} className="text-3xl font-bold">{stats.totalUsers}</p>
                 </div>
-                <div className="p-3 rounded-lg bg-green-100 group-hover:bg-green-200 transition-colors">
-                  <UserGroupIcon className="h-6 w-6 text-green-600" />
+                <div 
+                  className="p-3 rounded-xl transition-all duration-300 transform group-hover:scale-110"
+                  style={{
+                    background: `linear-gradient(to bottom right, ${getColorStyles('green').bgLight}, ${getColorStyles('green').bgMedium})`
+                  }}
+                >
+                  <UserGroupIcon style={{ color: getColorStyles('green').text }} className="h-6 w-6" />
                 </div>
               </div>
             </motion.div>
@@ -353,16 +465,21 @@ const AdminDashboard = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group"
+              className="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl border border-gray-100 hover:border-purple-200 transition-all duration-300 cursor-pointer group transform hover:-translate-y-1"
               onClick={() => navigate('/admin/departments')}
             >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600 mb-1">Departments</p>
-                  <p className="text-3xl font-bold text-purple-600">{stats.totalDepartments}</p>
+                  <p style={{ color: getColorStyles('purple').text }} className="text-3xl font-bold">{stats.totalDepartments}</p>
                 </div>
-                <div className="p-3 rounded-lg bg-purple-100 group-hover:bg-purple-200 transition-colors">
-                  <AcademicCapIcon className="h-6 w-6 text-purple-600" />
+                <div 
+                  className="p-3 rounded-xl transition-all duration-300 transform group-hover:scale-110"
+                  style={{
+                    background: `linear-gradient(to bottom right, ${getColorStyles('purple').bgLight}, ${getColorStyles('purple').bgMedium})`
+                  }}
+                >
+                  <AcademicCapIcon style={{ color: getColorStyles('purple').text }} className="h-6 w-6" />
                 </div>
               </div>
             </motion.div>
@@ -371,42 +488,54 @@ const AdminDashboard = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.4 }}
-              className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group"
+              className="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl border border-gray-100 hover:border-purple-200 transition-all duration-300 cursor-pointer group transform hover:-translate-y-1"
               onClick={() => navigate('/admin/theses?filter=recent')}
             >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600 mb-1">Recent Submissions</p>
-                  <p className="text-3xl font-bold text-orange-600">{stats.recentSubmissions}</p>
+                  <p style={{ color: getColorStyles('orange').text }} className="text-3xl font-bold">{stats.recentSubmissions}</p>
                 </div>
-                <div className="p-3 rounded-lg bg-orange-100 group-hover:bg-orange-200 transition-colors">
-                  <ClockIcon className="h-6 w-6 text-orange-600" />
+                <div 
+                  className="p-3 rounded-xl transition-all duration-300 transform group-hover:scale-110"
+                  style={{
+                    background: `linear-gradient(to bottom right, ${getColorStyles('orange').bgLight}, ${getColorStyles('orange').bgMedium})`
+                  }}
+                >
+                  <ClockIcon style={{ color: getColorStyles('orange').text }} className="h-6 w-6" />
                 </div>
               </div>
             </motion.div>
           </motion.div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {/* Quick Actions */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="lg:col-span-2"
             >
-              <div className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg mb-8">
-                <h2 className="text-2xl font-bold text-gray-800 mb-6">Quick Actions</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 h-full">
+                <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                  <div className="w-1 h-8 bg-gradient-to-b from-purple-600 to-purple-400 rounded-full"></div>
+                  Quick Actions
+                </h2>
+                <div className="space-y-4">
                   <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3, delay: 0.2 }}
-                    className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-all duration-300 cursor-pointer group"
+                    className="p-4 border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:shadow-lg transition-all duration-300 cursor-pointer group bg-gradient-to-br from-white to-gray-50 hover:from-purple-50 hover:to-white transform hover:-translate-y-1"
                     onClick={() => navigate('/admin/theses')}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-blue-100 group-hover:bg-blue-200 transition-colors">
-                        <BookOpenIcon className="h-5 w-5 text-blue-600" />
+                      <div 
+                        className="p-2 rounded-xl transition-all duration-300 transform group-hover:rotate-6"
+                        style={{
+                          background: `linear-gradient(to bottom right, ${getColorStyles('blue').bgLight}, ${getColorStyles('blue').bgMedium})`
+                        }}
+                      >
+                        <BookOpenIcon style={{ color: getColorStyles('blue').text }} className="h-5 w-5" />
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-800">Manage Theses</h3>
@@ -419,12 +548,17 @@ const AdminDashboard = () => {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3, delay: 0.3 }}
-                    className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-all duration-300 cursor-pointer group"
+                    className="p-4 border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:shadow-lg transition-all duration-300 cursor-pointer group bg-gradient-to-br from-white to-gray-50 hover:from-purple-50 hover:to-white transform hover:-translate-y-1"
                     onClick={() => navigate('/admin/users')}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-green-100 group-hover:bg-green-200 transition-colors">
-                        <UserGroupIcon className="h-5 w-5 text-green-600" />
+                      <div 
+                        className="p-2 rounded-xl transition-all duration-300 transform group-hover:rotate-6"
+                        style={{
+                          background: `linear-gradient(to bottom right, ${getColorStyles('green').bgLight}, ${getColorStyles('green').bgMedium})`
+                        }}
+                      >
+                        <UserGroupIcon style={{ color: getColorStyles('green').text }} className="h-5 w-5" />
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-800">Manage Users</h3>
@@ -437,12 +571,17 @@ const AdminDashboard = () => {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3, delay: 0.4 }}
-                    className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-all duration-300 cursor-pointer group"
+                    className="p-4 border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:shadow-lg transition-all duration-300 cursor-pointer group bg-gradient-to-br from-white to-gray-50 hover:from-purple-50 hover:to-white transform hover:-translate-y-1"
                     onClick={() => navigate('/admin/analytics')}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-purple-100 group-hover:bg-purple-200 transition-colors">
-                        <ChartBarIcon className="h-5 w-5 text-purple-600" />
+                      <div 
+                        className="p-2 rounded-xl transition-all duration-300 transform group-hover:rotate-6"
+                        style={{
+                          background: `linear-gradient(to bottom right, ${getColorStyles('purple').bgLight}, ${getColorStyles('purple').bgMedium})`
+                        }}
+                      >
+                        <ChartBarIcon style={{ color: getColorStyles('purple').text }} className="h-5 w-5" />
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-800">Analytics</h3>
@@ -455,12 +594,17 @@ const AdminDashboard = () => {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3, delay: 0.5 }}
-                    className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-all duration-300 cursor-pointer group"
+                    className="p-4 border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:shadow-lg transition-all duration-300 cursor-pointer group bg-gradient-to-br from-white to-gray-50 hover:from-purple-50 hover:to-white transform hover:-translate-y-1"
                     onClick={() => navigate('/admin/departments')}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-orange-100 group-hover:bg-orange-200 transition-colors">
-                        <AcademicCapIcon className="h-5 w-5 text-orange-600" />
+                      <div 
+                        className="p-2 rounded-xl transition-all duration-300 transform group-hover:rotate-6"
+                        style={{
+                          background: `linear-gradient(to bottom right, ${getColorStyles('orange').bgLight}, ${getColorStyles('orange').bgMedium})`
+                        }}
+                      >
+                        <AcademicCapIcon style={{ color: getColorStyles('orange').text }} className="h-5 w-5" />
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-800">Departments</h3>
@@ -468,105 +612,49 @@ const AdminDashboard = () => {
                       </div>
                     </div>
                   </motion.div>
-                </div>
-              </div>
-
-              {/* Recent Theses Management */}
-              <div className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-gray-800">Recent Theses</h2>
-                  <button
-                    onClick={() => navigate('/admin/theses')}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: 0.7 }}
+                    className="p-4 border-2 border-blue-200 rounded-xl hover:border-blue-400 hover:shadow-lg transition-all duration-300 cursor-pointer group bg-gradient-to-br from-blue-50 to-white hover:from-blue-100 hover:to-white transform hover:-translate-y-1"
+                    onClick={() => navigate('/admin/departments?action=create')}
                   >
-                    View All
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  {dashboardData.recentTheses.map((thesis, index) => (
-                    <motion.div
-                      key={thesis.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.3, delay: 0.2 + (index * 0.1) }}
-                      className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-all duration-300"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-gray-800 mb-1">{thesis.title}</h3>
-                          <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
-                            <span><strong>Author:</strong> {thesis.author}</span>
-                            <span><strong>Department:</strong> {thesis.department}</span>
-                            <span><strong>Adviser:</strong> {thesis.adviser}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium bg-${getStatusColor(thesis.status)}-100 text-${getStatusColor(thesis.status)}-800`}>
-                              {thesis.status}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              Submitted: {formatTimeAgo(thesis.submittedAt)}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 ml-4">
-                          {thesis.status === 'Under Review' && (
-                            <>
-                              <button
-                                onClick={() => handleApprove(thesis)}
-                                className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
-                                title="Approve"
-                              >
-                                <CheckIcon className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleReject(thesis)}
-                                className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                                title="Reject"
-                              >
-                                <XMarkIcon className="h-4 w-4" />
-                              </button>
-                            </>
-                          )}
-                          <button
-                            onClick={() => handleEdit(thesis, 'thesis')}
-                            className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <PencilIcon className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(thesis, 'thesis')}
-                            className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                            title="Delete"
-                          >
-                            <TrashIcon className="h-4 w-4" />
-                          </button>
-                        </div>
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="p-2 rounded-xl transition-all duration-300 transform group-hover:rotate-6 bg-blue-100"
+                      >
+                        <PlusIcon className="h-5 w-5 text-blue-600" />
                       </div>
-                    </motion.div>
-                  ))}
+                      <div>
+                        <h3 className="font-semibold text-gray-800">Add Departments</h3>
+                        <p className="text-sm text-gray-600">Create new departments</p>
+                      </div>
+                    </div>
+                  </motion.div>
                 </div>
               </div>
             </motion.div>
 
-            {/* Sidebar */}
+            {/* Recent Activity */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className="space-y-6"
             >
-              {/* Recent Activity */}
-              <div className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg">
-                <h2 className="text-xl font-bold text-gray-800 mb-4">Recent Activity</h2>
+              <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 h-full">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-1 h-6 bg-gradient-to-b from-green-600 to-green-400 rounded-full"></div>
+                  Recent Activity
+                </h2>
                 <div className="space-y-3">
-                  {dashboardData.recentActivity.slice(0, 5).map((activity, index) => (
+                  {dashboardData.recentActivity && dashboardData.recentActivity.slice(0, 5).map((activity, index) => (
                     <motion.div
                       key={activity.id}
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.3, delay: 0.3 + (index * 0.1) }}
-                      className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
+                      className="flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-green-200 hover:shadow-md transition-all duration-300"
                     >
                       <div className={`p-1 rounded-full bg-${activity.type === 'thesis' ? 'blue' : activity.type === 'user' ? 'green' : 'purple'}-100`}>
                         <DocumentTextIcon className={`h-4 w-4 text-${activity.type === 'thesis' ? 'blue' : activity.type === 'user' ? 'green' : 'purple'}-600`} />
@@ -584,20 +672,81 @@ const AdminDashboard = () => {
                       </button>
                     </motion.div>
                   ))}
+                  {(!dashboardData.recentActivity || dashboardData.recentActivity.length === 0) && (
+                    <p className="text-gray-500 text-center py-4">No recent activity</p>
+                  )}
                 </div>
               </div>
+            </motion.div>
 
-              {/* Upcoming Events */}
-              <div className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg">
-                <h2 className="text-xl font-bold text-gray-800 mb-4">Upcoming Events</h2>
+            {/* Recent Theses */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+            >
+              <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 h-full">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <div className="w-1 h-6 bg-gradient-to-b from-blue-600 to-blue-400 rounded-full"></div>
+                    Recent Theses
+                  </h2>
+                  <button
+                    onClick={() => navigate('/admin/theses')}
+                    className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    View All
+                  </button>
+                </div>
                 <div className="space-y-3">
-                  {dashboardData.upcomingEvents.slice(0, 3).map((event, index) => (
+                  {dashboardData.recentTheses && dashboardData.recentTheses.slice(0, 5).map((thesis, index) => (
+                    <motion.div
+                      key={thesis.id}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: 0.4 + (index * 0.1) }}
+                      className="p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300 cursor-pointer"
+                      onClick={() => navigate(`/admin/theses/${thesis.id}`)}
+                    >
+                      <p className="text-sm font-medium text-gray-800 mb-1 line-clamp-2">{thesis.title}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium bg-${getStatusColor(thesis.status)}-100 text-${getStatusColor(thesis.status)}-800`}>
+                          {thesis.status}
+                        </span>
+                        <span className="text-xs text-gray-500">{formatTimeAgo(thesis.submittedAt)}</span>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1">by {thesis.author}</p>
+                    </motion.div>
+                  ))}
+                  {(!dashboardData.recentTheses || dashboardData.recentTheses.length === 0) && (
+                    <p className="text-gray-500 text-center py-4">No recent theses</p>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Upcoming Events and Pending Reviews - Separate row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+            {/* Upcoming Events */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.5 }}
+            >
+              <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-1 h-6 bg-gradient-to-b from-orange-600 to-orange-400 rounded-full"></div>
+                  Upcoming Events
+                </h2>
+                <div className="space-y-3">
+                  {dashboardData.upcomingEvents && dashboardData.upcomingEvents.slice(0, 3).map((event, index) => (
                     <motion.div
                       key={event.id}
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.3, delay: 0.4 + (index * 0.1) }}
-                      className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
+                      transition={{ duration: 0.3, delay: 0.5 + (index * 0.1) }}
+                      className="flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-orange-200 hover:shadow-md transition-all duration-300"
                     >
                       <div className="p-1 rounded-full bg-purple-100">
                         <CalendarIcon className="h-4 w-4 text-purple-600" />
@@ -608,6 +757,53 @@ const AdminDashboard = () => {
                       </div>
                     </motion.div>
                   ))}
+                  {(!dashboardData.upcomingEvents || dashboardData.upcomingEvents.length === 0) && (
+                    <p className="text-gray-500 text-center py-4">No upcoming events</p>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Pending Reviews */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.6 }}
+            >
+              <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-1 h-6 bg-gradient-to-b from-red-600 to-red-400 rounded-full"></div>
+                  Pending Reviews
+                </h2>
+                <div className="space-y-3">
+                  {dashboardData.pendingReviews && dashboardData.pendingReviews.slice(0, 3).map((thesis, index) => (
+                    <motion.div
+                      key={thesis.id}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: 0.6 + (index * 0.1) }}
+                      className="flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-red-200 hover:shadow-md transition-all duration-300"
+                    >
+                      <div className="p-1 rounded-full bg-red-100">
+                        <DocumentTextIcon className="h-4 w-4 text-red-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-800">{thesis.title}</p>
+                        <p className="text-xs text-gray-500">
+                          {thesis.author} - {formatTimeAgo(thesis.submittedAt)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => navigate(`/admin/theses/${thesis.id}/review`)}
+                        className="px-3 py-1 bg-red-500 text-white rounded-lg text-xs hover:bg-red-600 transition-colors"
+                      >
+                        Review
+                      </button>
+                    </motion.div>
+                  ))}
+                  {(!dashboardData.pendingReviews || dashboardData.pendingReviews.length === 0) && (
+                    <p className="text-gray-500 text-center py-4">No pending reviews</p>
+                  )}
                 </div>
               </div>
             </motion.div>

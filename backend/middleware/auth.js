@@ -21,7 +21,8 @@ const protect = async (req, res, next) => {
 
     try {
       // Verify token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const secret = process.env.JWT_SECRET || 'fallback-secret-key-for-development';
+      const decoded = jwt.verify(token, secret);
       
       // Get user from token
       const user = await User.findByPk(decoded.id, {
@@ -35,7 +36,7 @@ const protect = async (req, res, next) => {
         });
       }
 
-      if (!user.isActive) {
+      if (!user.is_active) {
         return res.status(401).json({
           success: false,
           message: 'User account is deactivated'
@@ -82,12 +83,13 @@ const optionalAuth = async (req, res, next) => {
 
     if (token) {
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const secret = process.env.JWT_SECRET || 'fallback-secret-key-for-development';
+        const decoded = jwt.verify(token, secret);
         const user = await User.findByPk(decoded.id, {
           attributes: { exclude: ['password'] }
         });
         
-        if (user && user.isActive) {
+        if (user && user.is_active) {
           req.user = user;
         }
       } catch (error) {

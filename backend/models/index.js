@@ -4,56 +4,68 @@ const User = require('./User');
 const Thesis = require('./Thesis');
 const Calendar = require('./Calendar');
 const Department = require('./Department');
+const Course = require('./Course');
+const AuditLog = require('./AuditLog');
 
 // Define associations
 User.hasMany(Thesis, { 
-  foreignKey: 'adviserId', 
+  foreignKey: 'adviser_id', 
   as: 'advisedTheses' 
 });
 Thesis.belongsTo(User, { 
-  foreignKey: 'adviserId', 
+  foreignKey: 'adviser_id', 
   as: 'adviser' 
 });
 
 User.hasMany(Calendar, { 
-  foreignKey: 'organizerId', 
+  foreignKey: 'organizer_id', 
   as: 'organizedEvents' 
 });
 Calendar.belongsTo(User, { 
-  foreignKey: 'organizerId', 
+  foreignKey: 'organizer_id', 
   as: 'organizer' 
 });
 
 Thesis.hasMany(Calendar, { 
-  foreignKey: 'thesisId', 
+  foreignKey: 'thesis_id', 
   as: 'events' 
 });
 Calendar.belongsTo(Thesis, { 
-  foreignKey: 'thesisId', 
+  foreignKey: 'thesis_id', 
   as: 'thesis' 
 });
 
 User.hasMany(Thesis, { 
-  foreignKey: 'reviewerId', 
+  foreignKey: 'reviewer_id', 
   as: 'reviewedTheses' 
 });
 Thesis.belongsTo(User, { 
-  foreignKey: 'reviewerId', 
+  foreignKey: 'reviewer_id', 
   as: 'reviewer' 
 });
 
 Department.hasMany(User, { 
-  foreignKey: 'headId', 
+  foreignKey: 'head_id', 
   as: 'head' 
 });
 User.belongsTo(Department, { 
-  foreignKey: 'headId', 
+  foreignKey: 'head_id', 
   as: 'departmentHead' 
+});
+
+// Department-Course relationship
+Department.hasMany(Course, {
+  foreignKey: 'department_id',
+  as: 'courses'
+});
+Course.belongsTo(Department, {
+  foreignKey: 'department_id',
+  as: 'department'
 });
 
 // Many-to-many relationship for thesis authors
 const ThesisAuthors = sequelize.define('ThesisAuthors', {
-  thesisId: {
+  thesis_id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
     references: {
@@ -61,7 +73,7 @@ const ThesisAuthors = sequelize.define('ThesisAuthors', {
       key: 'id'
     }
   },
-  userId: {
+  user_id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
     references: {
@@ -76,13 +88,23 @@ const ThesisAuthors = sequelize.define('ThesisAuthors', {
 
 User.belongsToMany(Thesis, { 
   through: ThesisAuthors, 
-  foreignKey: 'userId', 
+  foreignKey: 'user_id', 
   as: 'authoredTheses' 
 });
 Thesis.belongsToMany(User, { 
   through: ThesisAuthors, 
-  foreignKey: 'thesisId', 
+  foreignKey: 'thesis_id', 
   as: 'authors' 
+});
+
+// AuditLog associations
+User.hasMany(AuditLog, {
+  foreignKey: 'user_id',
+  as: 'auditLogs'
+});
+AuditLog.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user'
 });
 
 module.exports = {
@@ -91,5 +113,7 @@ module.exports = {
   Thesis,
   Calendar,
   Department,
-  ThesisAuthors
+  Course,
+  ThesisAuthors,
+  AuditLog
 };

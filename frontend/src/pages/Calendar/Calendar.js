@@ -1,366 +1,235 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import Header from '../../components/Layout/Header';
 import Footer from '../../components/Layout/Footer';
 import BackgroundImage from '../../components/UI/BackgroundImage';
 
-const Calendar = () => {
-  const [events, setEvents] = useState([]);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [showModal, setShowModal] = useState(false);
-  const [modalData, setModalData] = useState({
-    title: '',
-    type: 'thesis',
-    thesisTitle: '',
-    thesisAuthors: '',
-    defenseType: 'Thesis Defense',
-    defenders: '',
-    panelists: '',
-    defenseDate: '',
-    defenseNotes: ''
+const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+const MOCK_EVENTS = {
+  '2025-11-03': [
+    {
+      id: 'evt-101',
+      title: 'Thesis Defense: Smart Irrigation System',
+      department: 'College of Engineering',
+      time: '10:00 AM',
+      location: 'Room 402',
+      description: 'Final defense with panel.',
+    },
+  ],
+  '2025-11-10': [
+    {
+      id: 'evt-201',
+      title: 'Submission: AI-driven Fraud Detection',
+      department: 'College of Business and Accountancy',
+      time: 'All Day',
+      location: 'Registrar Office',
+      description: 'Final manuscript submission.',
+    },
+    {
+      id: 'evt-202',
+      title: 'Thesis Defense: Interactive VR Tour',
+      department: 'College of Computing',
+      time: '2:00 PM',
+      location: 'Innovation Lab',
+      description: 'Defense for VR project.',
+    },
+  ],
+  '2025-11-18': [
+    {
+      id: 'evt-301',
+      title: 'Proposal Review: Green Campus Initiative',
+      department: 'School of Graduate Studies',
+      time: '1:30 PM',
+      location: 'Conference Room B',
+      description: 'Proposal review with committee.',
+    },
+  ],
+};
+
+const getFirstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
+const getLastDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0);
+
+const buildDaysForMonth = (currentMonth) => {
+  const totalDays = getLastDayOfMonth(currentMonth).getDate();
+  return Array.from({ length: totalDays }, (_, idx) => {
+    const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), idx + 1);
+    return {
+      date,
+      dayNumber: idx + 1,
+      dayName: DAYS_OF_WEEK[date.getDay()],
+    };
   });
-  const [isLoading, setIsLoading] = useState(true);
+};
 
-  // Mock events data - replace with actual API call
-  useEffect(() => {
-    const mockEvents = [
-      {
-        id: 1,
-        title: "Machine Learning Research",
-        type: "thesis",
-        date: "2023-05-15",
-        authors: "John Doe, Jane Smith"
-      },
-      {
-        id: 2,
-        title: "Thesis Defense - Web Development",
-        type: "defense",
-        date: "2023-06-20T10:00:00",
-        defenders: "Alice Johnson",
-        panelists: "Dr. Smith, Dr. Brown",
-        defenseType: "Thesis Defense"
-      }
-    ];
-    
-    setEvents(mockEvents);
-    setIsLoading(false);
-  }, []);
+const formatKey = (date) => date.toISOString().split('T')[0];
+const isSameDay = (a, b) =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
 
-  const handleYearChange = (year) => {
-    setSelectedYear(parseInt(year));
-  };
+const Calendar = () => {
+  const today = useMemo(() => new Date(), []);
+  const [currentMonth, setCurrentMonth] = useState(() => new Date());
+  const [monthInput, setMonthInput] = useState(() => new Date().getMonth() + 1);
+  const [yearInput, setYearInput] = useState(() => new Date().getFullYear());
 
-  const handleDateClick = (date) => {
-    setModalData({
-      title: 'Add Event',
-      type: 'thesis',
-      thesisTitle: '',
-      thesisAuthors: '',
-      defenseType: 'Thesis Defense',
-      defenders: '',
-      panelists: '',
-      defenseDate: date + 'T09:00',
-      defenseNotes: ''
-    });
-    setShowModal(true);
-  };
+  const calendarDays = useMemo(() => buildDaysForMonth(currentMonth), [currentMonth]);
 
-  const handleEventClick = (event) => {
-    if (event.type === 'defense') {
-      setModalData({
-        title: 'Edit Defense',
-        type: 'defense',
-        thesisTitle: '',
-        thesisAuthors: '',
-        defenseType: event.defenseType || 'Thesis Defense',
-        defenders: event.defenders || '',
-        panelists: event.panelists || '',
-        defenseDate: event.date,
-        defenseNotes: event.notes || ''
-      });
-    } else {
-      setModalData({
-        title: 'Edit Thesis',
-        type: 'thesis',
-        thesisTitle: event.title,
-        thesisAuthors: event.authors || '',
-        defenseType: 'Thesis Defense',
-        defenders: '',
-        panelists: '',
-        defenseDate: event.date + 'T09:00',
-        defenseNotes: ''
-      });
-    }
-    setShowModal(true);
-  };
-
-  const handleModalSubmit = async (e) => {
+  const handleMonthYearSubmit = (e) => {
     e.preventDefault();
-    // Handle form submission
-    console.log('Submit event:', modalData);
-    setShowModal(false);
+    if (!yearInput || !monthInput) return;
+    const newDate = new Date(yearInput, monthInput - 1, 1);
+    setCurrentMonth(newDate);
   };
-
-  const handleModalDelete = async () => {
-    if (window.confirm('Delete this event?')) {
-      // Handle deletion
-      console.log('Delete event');
-      setShowModal(false);
-    }
-  };
-
-  const closeModal = () => {
-    setShowModal(false);
-  };
-
-  // Generate year options
-  const yearOptions = [];
-  const currentYear = new Date().getFullYear();
-  for (let year = 2015; year <= currentYear + 5; year++) {
-    yearOptions.push(year);
-  }
 
   return (
     <>
       <Helmet>
         <title>Calendar - FAITH Colleges Thesis Archive</title>
-        <meta name="description" content="View and manage thesis events and defenses on the calendar" />
+        <meta name="description" content="View the academic calendar." />
       </Helmet>
-      
+
       <BackgroundImage />
       <Header />
-      
-      <main className="min-h-screen pt-16 pb-20">
-        <div className="w-11/12 max-w-6xl mx-auto mt-8">
+
+      <main
+        className="min-h-screen pt-16 pb-20"
+        style={{ position: 'relative', zIndex: 1 }}
+      >
+        <div className="w-11/12 max-w-4xl mx-auto mt-8">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg"
+            transition={{ duration: 0.4 }}
+            className="bg-white/95 backdrop-blur-sm p-8 rounded-3xl shadow-xl border border-white/60"
           >
-            <h1 className="text-3xl font-bold text-gray-800 mb-6">Thesis Calendar</h1>
-            
-            {/* Year Selector */}
-            <div className="mb-6">
-              <label htmlFor="yearSelect" className="block text-sm font-medium text-gray-700 mb-2">
-                <strong>Jump to Year:</strong>
-              </label>
-              <select
-                id="yearSelect"
-                value={selectedYear}
-                onChange={(e) => handleYearChange(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            <div className="text-center mb-6">
+              <h1 className="text-3xl font-bold text-gray-800">
+                {currentMonth.toLocaleDateString('en-US', {
+                  month: 'long',
+                  year: 'numeric',
+                })}
+              </h1>
+            </div>
+
+            <form
+              onSubmit={handleMonthYearSubmit}
+              className="flex flex-wrap items-center gap-3 mb-6 bg-gray-50 rounded-2xl px-4 py-3"
+            >
+              <div className="flex items-center gap-2">
+                <label htmlFor="month" className="text-sm font-medium text-gray-600">
+                  Month
+                </label>
+                <select
+                  id="month"
+                  value={monthInput}
+                  onChange={(e) => setMonthInput(Number(e.target.value))}
+                  className="px-3 py-1.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {Array.from({ length: 12 }).map((_, index) => (
+                    <option key={index} value={index + 1}>
+                      {new Date(0, index).toLocaleDateString('en-US', { month: 'long' })}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <label htmlFor="year" className="text-sm font-medium text-gray-600">
+                  Year
+                </label>
+                <input
+                  id="year"
+                  type="number"
+                  value={yearInput}
+                  onChange={(e) => setYearInput(Number(e.target.value))}
+                  className="w-24 px-3 py-1.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  min={1900}
+                  max={2100}
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                className="ml-auto px-5 py-2 rounded-xl bg-blue-500 text-white font-semibold shadow hover:bg-blue-600 transition"
               >
-                {yearOptions.map(year => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
-            </div>
+                Go
+              </button>
+            </form>
 
-            {/* Calendar Placeholder */}
-            <div className="bg-gray-100 rounded-lg p-8 text-center">
-              <h3 className="text-lg font-semibold text-gray-700 mb-4">Calendar View</h3>
-              <p className="text-gray-600 mb-4">
-                This would integrate with FullCalendar or similar library
-              </p>
-              <div className="grid grid-cols-7 gap-2 mb-4">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="p-2 text-sm font-semibold text-gray-600 bg-gray-200 rounded">
-                    {day}
-                  </div>
-                ))}
-                {Array.from({ length: 35 }, (_, i) => (
+            <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-200 bg-white">
+              {calendarDays.map(({ date, dayNumber, dayName }) => {
+                const isTodayFlag = isSameDay(date, today);
+                const eventsForDay = MOCK_EVENTS[formatKey(date)] || [];
+                if (eventsForDay.length === 0) {
+                  return null;
+                }
+
+                return (
                   <div
-                    key={i}
-                    className="p-2 h-16 bg-white border border-gray-200 rounded cursor-pointer hover:bg-blue-50"
-                    onClick={() => handleDateClick(`2023-05-${String(i + 1).padStart(2, '0')}`)}
+                    key={date.toISOString()}
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-3 bg-white"
+                    style={{ boxShadow: '0 1px 0 rgba(0,0,0,0.05)' }}
                   >
-                    {i + 1}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Events List */}
-            <div className="mt-8">
-              <h3 className="text-lg font-semibold text-gray-700 mb-4">Upcoming Events</h3>
-              <div className="space-y-3">
-                {events.map(event => (
-                  <motion.div
-                    key={event.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
-                    onClick={() => handleEventClick(event)}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-semibold text-gray-800">{event.title}</h4>
-                        <p className="text-sm text-gray-600">
-                          {event.type === 'defense' ? 'Defense' : 'Thesis Submission'} • {event.date}
-                        </p>
-                        {event.authors && (
-                          <p className="text-sm text-gray-500">Authors: {event.authors}</p>
-                        )}
+                    <div className="flex items-center gap-4">
+                      <div
+                        className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center border ${
+                          isTodayFlag
+                            ? 'border-blue-500 text-blue-600 bg-blue-50'
+                            : 'border-gray-300 text-gray-700 bg-gray-50'
+                        }`}
+                      >
+                        <span className="text-[10px] uppercase tracking-wide font-semibold">{dayName}</span>
+                        <span className="text-lg font-bold">{dayNumber}</span>
                       </div>
-                      <span className={`px-2 py-1 text-xs rounded ${
-                        event.type === 'defense' 
-                          ? 'bg-red-100 text-red-700' 
-                          : 'bg-blue-100 text-blue-700'
-                      }`}>
-                        {event.type === 'defense' ? 'Defense' : 'Thesis'}
-                      </span>
+                      <div>
+                        <p className="text-sm text-gray-500">
+                          {date.toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                          })}
+                        </p>
+                        {eventsForDay.length === 0 ? (
+                          <p className="text-xs text-gray-400">No events scheduled.</p>
+                        ) : null}
+                      </div>
                     </div>
-                  </motion.div>
-                ))}
-              </div>
+                    <div className="text-sm text-gray-500">
+                        {eventsForDay.length === 0
+                          ? 'Departments can populate thesis events for this date.'
+                          : `${eventsForDay.length} event${eventsForDay.length > 1 ? 's' : ''}`}
+                      </div>
+                    {eventsForDay.length > 0 && (
+                      <div className="px-10 pb-4">
+                        <div className="space-y-3">
+                          {eventsForDay.map((event) => (
+                            <div
+                              key={event.id}
+                              className="rounded-xl border border-gray-200 bg-white shadow-sm px-4 py-3"
+                            >
+                              <h3 className="text-sm font-semibold text-gray-800">{event.title}</h3>
+                              <p className="text-xs text-gray-500">{event.department}</p>
+                              <p className="text-xs text-gray-500">Time: {event.time}</p>
+                              <p className="text-xs text-gray-500">Location: {event.location}</p>
+                              {event.description && (
+                                <p className="text-xs text-gray-500 mt-1">{event.description}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </motion.div>
         </div>
       </main>
-      
+
       <Footer />
-
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-lg p-6 w-full max-w-md mx-4"
-          >
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">{modalData.title}</h2>
-              <button
-                onClick={closeModal}
-                className="text-gray-400 hover:text-gray-600 text-2xl"
-              >
-                ×
-              </button>
-            </div>
-
-            <form onSubmit={handleModalSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Event Type:
-                </label>
-                <select
-                  value={modalData.type}
-                  onChange={(e) => setModalData({...modalData, type: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="thesis">Thesis Submission</option>
-                  <option value="defense">Defense</option>
-                </select>
-              </div>
-
-              {modalData.type === 'thesis' ? (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Title:
-                    </label>
-                    <input
-                      type="text"
-                      value={modalData.thesisTitle}
-                      onChange={(e) => setModalData({...modalData, thesisTitle: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Authors:
-                    </label>
-                    <input
-                      type="text"
-                      value={modalData.thesisAuthors}
-                      onChange={(e) => setModalData({...modalData, thesisAuthors: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Defense Type:
-                    </label>
-                    <select
-                      value={modalData.defenseType}
-                      onChange={(e) => setModalData({...modalData, defenseType: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="Thesis Defense">Thesis Defense</option>
-                      <option value="Title Defense">Title Defense</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Defenders:
-                    </label>
-                    <input
-                      type="text"
-                      value={modalData.defenders}
-                      onChange={(e) => setModalData({...modalData, defenders: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Panelists:
-                    </label>
-                    <input
-                      type="text"
-                      value={modalData.panelists}
-                      onChange={(e) => setModalData({...modalData, panelists: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Date & Time:
-                    </label>
-                    <input
-                      type="datetime-local"
-                      value={modalData.defenseDate}
-                      onChange={(e) => setModalData({...modalData, defenseDate: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Notes:
-                    </label>
-                    <textarea
-                      value={modalData.defenseNotes}
-                      onChange={(e) => setModalData({...modalData, defenseNotes: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      rows="3"
-                    />
-                  </div>
-                </>
-              )}
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="submit"
-                  className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Save
-                </button>
-                <button
-                  type="button"
-                  onClick={handleModalDelete}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  Delete
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
     </>
   );
 };

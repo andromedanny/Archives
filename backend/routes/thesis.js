@@ -1,9 +1,12 @@
 const express = require('express');
 const { body, validationResult, query } = require('express-validator');
-const Thesis = require('../models/Thesis');
-const User = require('../models/User');
+const { Op } = require('sequelize');
+const { Thesis, User, ThesisAuthors } = require('../models');
 const { protect, authorize, optionalAuth } = require('../middleware/auth');
-const { uploadThesisDocument, uploadSupplementaryFiles, handleUploadError, getFileInfo } = require('../middleware/upload');
+const { uploadThesisDocument, uploadSupplementaryFiles, handleUploadError, getFileInfo, verifyFileIntegrity } = require('../middleware/upload');
+const { logAction, logFileOperation } = require('../middleware/audit');
+const path = require('path');
+const fs = require('fs');
 
 const router = express.Router();
 
@@ -33,64 +36,198 @@ router.get('/', [
 
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
+    const offset = (page - 1) * limit;
 
-    // Build query
-    const query = { isPublic: true, status: 'Published' };
+    // Build where clause (using snake_case to match database columns)
+    const where = { is_public: true, status: 'Published' };
 
-    // Search functionality
+    // Search functionality (Objective 5.3: Advanced search)
     if (req.query.search) {
-      query.$text = { $search: req.query.search };
+      const searchTerm = `%${req.query.search}%`;
+      where[Op.or] = [
+        { title: { [Op.like]: searchTerm } },
+        { abstract: { [Op.like]: searchTerm } },
+        // Search in keywords (Objective 5.3: Keyword search)
+        { keywords: { [Op.like]: searchTerm } }
+      ];
+    }
+
+    // Keyword search (Objective 5.3: Advanced search with keywords)
+    if (req.query.keywords) {
+      const keywords = Array.isArray(req.query.keywords) 
+        ? req.query.keywords 
+        : req.query.keywords.split(',').map(k => k.trim());
+      
+      if (!where[Op.or]) {
+        where[Op.or] = [];
+      }
+      keywords.forEach(keyword => {
+        where[Op.or].push({
+          keywords: { [Op.like]: `%${keyword}%` }
+        });
+      });
+    }
+
+    // Date range filtering (Objective 5.3: Date range search)
+    if (req.query.dateFrom || req.query.dateTo) {
+      where.submitted_at = {};
+      if (req.query.dateFrom) {
+        where.submitted_at[Op.gte] = new Date(req.query.dateFrom);
+      }
+      if (req.query.dateTo) {
+        where.submitted_at[Op.lte] = new Date(req.query.dateTo);
+      }
     }
 
     // Filter by department
     if (req.query.department) {
-      query.department = req.query.department;
+      where.department = req.query.department;
     }
 
     // Filter by program
     if (req.query.program) {
-      query.program = req.query.program;
+      where.program = req.query.program;
     }
 
-    // Filter by academic year
+    // Filter by academic year (convert camelCase to snake_case)
     if (req.query.academicYear) {
-      query.academicYear = req.query.academicYear;
+      where.academic_year = req.query.academicYear;
     }
 
     // Filter by category
     if (req.query.category) {
-      query.category = req.query.category;
+      where.category = req.query.category;
     }
 
-    // Sort options
-    const sortBy = req.query.sortBy || 'publishedAt';
-    const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
-    const sort = { [sortBy]: sortOrder };
+    // Sort options (convert camelCase to snake_case)
+    let sortBy = req.query.sortBy || 'published_at';
+    // Convert camelCase sortBy to snake_case
+    const sortByMap = {
+      'publishedAt': 'published_at',
+      'downloadCount': 'download_count',
+      'viewCount': 'view_count'
+    };
+    sortBy = sortByMap[sortBy] || sortBy;
+    
+    const sortOrder = req.query.sortOrder === 'asc' ? 'ASC' : 'DESC';
+    const order = [[sortBy, sortOrder]];
 
     // Execute query
-    const theses = await Thesis.find(query)
-      .populate('authors', 'firstName lastName')
-      .populate('adviser', 'firstName lastName')
-      .sort(sort)
-      .skip(skip)
-      .limit(limit);
-
-    const total = await Thesis.countDocuments(query);
+    const { count, rows: theses } = await Thesis.findAndCountAll({
+      where,
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id', 'firstName', 'lastName'],
+          through: { attributes: [] }
+        },
+        {
+          model: User,
+          as: 'adviser',
+          attributes: ['id', 'firstName', 'lastName']
+        }
+      ],
+      order,
+      limit,
+      offset,
+      distinct: true
+    });
 
     res.json({
       success: true,
       count: theses.length,
-      total,
+      total: count,
       page,
-      pages: Math.ceil(total / limit),
+      pages: Math.ceil(count / limit),
       data: theses
     });
   } catch (error) {
     console.error('Get theses error:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// @desc    Upload thesis document
+// @route   POST /api/thesis/:id/document
+// @access  Private (Thesis authors and admin)
+router.post('/:id/document', protect, uploadThesisDocument, handleUploadError, async (req, res) => {
+  try {
+    const thesis = await Thesis.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id'],
+          through: { attributes: [] }
+        }
+      ]
+    });
+
+    if (!thesis) {
+      return res.status(404).json({
+        success: false,
+        message: 'Thesis not found'
+      });
+    }
+
+    // Check if user is author or admin
+    const authorIds = thesis.authors.map(a => a.id);
+    const isAuthor = authorIds.includes(req.user.id);
+    
+    if (!isAuthor && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to upload document for this thesis'
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No file uploaded'
+      });
+    }
+
+    // Get file info (includes checksum for integrity verification - Objective 1.4)
+    const fileInfo = getFileInfo(req.file);
+
+    // Update thesis with document info (using snake_case)
+    // Includes checksum for file integrity verification
+    await thesis.update({
+      main_document: {
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        path: req.file.path,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+        checksum: fileInfo.checksum, // SHA256 checksum for integrity verification
+        uploadedAt: new Date()
+      }
+    });
+
+    // Log file upload (Objective 5.5: Audit logging)
+    await logFileOperation(req, 'thesis.upload', thesis.id, 'success');
+
+    res.json({
+      success: true,
+      message: 'Document uploaded successfully',
+      data: {
+        file: fileInfo
+      }
+    });
+  } catch (error) {
+    console.error('Upload document error:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -100,10 +237,26 @@ router.get('/', [
 // @access  Public
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
-    const thesis = await Thesis.findById(req.params.id)
-      .populate('authors', 'firstName lastName email department')
-      .populate('adviser', 'firstName lastName email department')
-      .populate('review.reviewer', 'firstName lastName');
+    const thesis = await Thesis.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'department'],
+          through: { attributes: [] }
+        },
+        {
+          model: User,
+          as: 'adviser',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'department']
+        },
+        {
+          model: User,
+          as: 'reviewer',
+          attributes: ['id', 'firstName', 'lastName']
+        }
+      ]
+    });
 
     if (!thesis) {
       return res.status(404).json({
@@ -114,11 +267,15 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
     // Check if user can view this thesis
     if (!thesis.isPublic && thesis.status !== 'Published') {
-      if (!req.user || (req.user.role !== 'admin' && !thesis.authors.some(author => author._id.toString() === req.user.id))) {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied'
-        });
+      if (!req.user || (req.user.role !== 'admin')) {
+        // Check if user is author
+        const authorIds = thesis.authors.map(a => a.id);
+        if (!authorIds.includes(req.user?.id)) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied'
+          });
+        }
       }
     }
 
@@ -138,10 +295,10 @@ router.get('/:id', optionalAuth, async (req, res) => {
   }
 });
 
-// @desc    Create new thesis
+// @desc    Create new thesis - ALL ROLES CAN CREATE
 // @route   POST /api/thesis
-// @access  Private (Students, Faculty)
-router.post('/', protect, authorize('student', 'faculty'), [
+// @access  Private (All authenticated users)
+router.post('/', protect, [
   body('title').trim().notEmpty().withMessage('Title is required'),
   body('abstract').trim().notEmpty().withMessage('Abstract is required'),
   body('department').trim().notEmpty().withMessage('Department is required'),
@@ -149,7 +306,7 @@ router.post('/', protect, authorize('student', 'faculty'), [
   body('academicYear').trim().notEmpty().withMessage('Academic year is required'),
   body('semester').isIn(['1st Semester', '2nd Semester', 'Summer']).withMessage('Invalid semester'),
   body('category').isIn(['Undergraduate', 'Graduate', 'Doctoral', 'Research Paper']).withMessage('Invalid category'),
-  body('adviser').isMongoId().withMessage('Valid adviser ID is required'),
+  body('adviserId').optional().isInt().withMessage('Valid adviser ID is required'),
   body('keywords').optional().isArray().withMessage('Keywords must be an array')
 ], async (req, res) => {
   try {
@@ -170,38 +327,107 @@ router.post('/', protect, authorize('student', 'faculty'), [
       academicYear,
       semester,
       category,
-      adviser,
+      adviserId,
       keywords
     } = req.body;
 
-    // Verify adviser exists
-    const adviserUser = await User.findById(adviser);
-    if (!adviserUser || !['faculty', 'adviser'].includes(adviserUser.role)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid adviser'
-      });
+    // Verify adviser exists if provided
+    let adviser = null;
+    if (adviserId) {
+      adviser = await User.findByPk(adviserId);
+      if (!adviser || !['faculty', 'adviser', 'prof', 'admin'].includes(adviser.role)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid adviser'
+        });
+      }
     }
 
-    // Create thesis
-    const thesis = await Thesis.create({
+    // Create thesis - use snake_case field names to match model definition
+    // Note: Even with underscored: true, when model defines fields in snake_case,
+    // we need to use the field names as defined in the model
+    const thesisData = {
       title,
       abstract,
-      authors: [req.user.id],
-      adviser,
       department,
       program,
-      academicYear,
       semester,
       category,
-      keywords: keywords || []
+      keywords: keywords || [],
+      status: 'Draft'
+    };
+    
+    // Add optional fields
+    if (adviserId) {
+      thesisData.adviser_id = adviserId;
+    }
+    if (academicYear) {
+      thesisData.academic_year = academicYear;
+    }
+    
+    const thesis = await Thesis.create(thesisData);
+
+    // Add current user as author using Sequelize association method
+    try {
+      // Use the Sequelize belongsToMany association method
+      await thesis.setAuthors([req.user.id]);
+      
+      // Verify the relationship was created
+      const authorCount = await ThesisAuthors.count({
+        where: {
+          thesis_id: thesis.id,
+          user_id: req.user.id
+        }
+      });
+      console.log('Author relationship verified - count:', authorCount);
+    } catch (authorError) {
+      console.error('Error adding author:', authorError);
+      console.error('Author error stack:', authorError.stack);
+      
+      // Try alternative method if setAuthors fails
+      try {
+        await ThesisAuthors.findOrCreate({
+          where: {
+            thesis_id: thesis.id,
+            user_id: req.user.id
+          },
+          defaults: {
+            thesis_id: thesis.id,
+            user_id: req.user.id
+          }
+        });
+      } catch (fallbackError) {
+        // Don't fail the whole request, but log the error silently
+      }
+    }
+
+    // Reload with associations
+    await thesis.reload({
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id', 'firstName', 'lastName'],
+          through: { attributes: [] }
+        },
+        {
+          model: User,
+          as: 'adviser',
+          attributes: ['id', 'firstName', 'lastName']
+        }
+      ]
     });
 
-    // Populate the created thesis
-    await thesis.populate([
-      { path: 'authors', select: 'firstName lastName' },
-      { path: 'adviser', select: 'firstName lastName' }
-    ]);
+    // Log thesis creation (Objective 5.5: Audit logging)
+    await logAction({
+      userId: req.user.id,
+      action: 'thesis.create',
+      resourceType: 'thesis',
+      resourceId: thesis.id,
+      description: `Created thesis: ${thesis.title}`,
+      status: 'success',
+      req
+    });
 
     res.status(201).json({
       success: true,
@@ -210,117 +436,35 @@ router.post('/', protect, authorize('student', 'faculty'), [
     });
   } catch (error) {
     console.error('Create thesis error:', error);
+    console.error('Error stack:', error.stack);
+    
+    // Log creation failure
+    await logAction({
+      userId: req.user?.id,
+      action: 'thesis.create',
+      resourceType: 'thesis',
+      description: `Failed to create thesis: ${req.body.title}`,
+      status: 'failure',
+      errorMessage: error.message,
+      req
+    });
+
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
 
-// @desc    Upload thesis document
-// @route   POST /api/thesis/:id/document
-// @access  Private (Thesis authors, Admin)
-router.post('/:id/document', protect, uploadThesisDocument, handleUploadError, async (req, res) => {
-  try {
-    const thesis = await Thesis.findById(req.params.id);
-
-    if (!thesis) {
-      return res.status(404).json({
-        success: false,
-        message: 'Thesis not found'
-      });
-    }
-
-    // Check if user is author or admin
-    const isAuthor = thesis.authors.some(author => author.toString() === req.user.id);
-    if (!isAuthor && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to upload document for this thesis'
-      });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'No file uploaded'
-      });
-    }
-
-    // Update thesis with document info
-    thesis.files.mainDocument = getFileInfo(req.file);
-    await thesis.save();
-
-    res.json({
-      success: true,
-      message: 'Document uploaded successfully',
-      data: thesis.files.mainDocument
-    });
-  } catch (error) {
-    console.error('Upload document error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
-
-// @desc    Upload supplementary files
-// @route   POST /api/thesis/:id/supplementary
-// @access  Private (Thesis authors, Admin)
-router.post('/:id/supplementary', protect, uploadSupplementaryFiles, handleUploadError, async (req, res) => {
-  try {
-    const thesis = await Thesis.findById(req.params.id);
-
-    if (!thesis) {
-      return res.status(404).json({
-        success: false,
-        message: 'Thesis not found'
-      });
-    }
-
-    // Check if user is author or admin
-    const isAuthor = thesis.authors.some(author => author.toString() === req.user.id);
-    if (!isAuthor && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to upload files for this thesis'
-      });
-    }
-
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'No files uploaded'
-      });
-    }
-
-    // Add supplementary files
-    const supplementaryFiles = req.files.map(file => getFileInfo(file));
-    thesis.files.supplementaryFiles.push(...supplementaryFiles);
-    await thesis.save();
-
-    res.json({
-      success: true,
-      message: 'Supplementary files uploaded successfully',
-      data: supplementaryFiles
-    });
-  } catch (error) {
-    console.error('Upload supplementary files error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
-
-// @desc    Update thesis
+// @desc    Update thesis - ALL ROLES CAN UPDATE (with restrictions)
 // @route   PUT /api/thesis/:id
-// @access  Private (Thesis authors, Admin)
+// @access  Private (Authors, Admin can update any)
 router.put('/:id', protect, [
   body('title').optional().trim().notEmpty().withMessage('Title cannot be empty'),
   body('abstract').optional().trim().notEmpty().withMessage('Abstract cannot be empty'),
-  body('keywords').optional().isArray().withMessage('Keywords must be an array')
+  body('keywords').optional().isArray().withMessage('Keywords must be an array'),
+  body('status').optional().isIn(['Draft', 'Under Review', 'Approved', 'Published', 'Rejected'])
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -332,7 +476,16 @@ router.put('/:id', protect, [
       });
     }
 
-    const thesis = await Thesis.findById(req.params.id);
+    const thesis = await Thesis.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id'],
+          through: { attributes: [] }
+        }
+      ]
+    });
 
     if (!thesis) {
       return res.status(404).json({
@@ -342,7 +495,9 @@ router.put('/:id', protect, [
     }
 
     // Check if user is author or admin
-    const isAuthor = thesis.authors.some(author => author.toString() === req.user.id);
+    const authorIds = thesis.authors.map(a => a.id);
+    const isAuthor = authorIds.includes(req.user.id);
+    
     if (!isAuthor && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -350,8 +505,18 @@ router.put('/:id', protect, [
       });
     }
 
-    // Only allow updates if thesis is in draft status
-    if (thesis.status !== 'Draft' && req.user.role !== 'admin') {
+    // Only allow status updates if admin, or if author updating to Under Review
+    if (req.body.status && req.user.role !== 'admin') {
+      if (req.body.status !== 'Under Review' && thesis.status !== 'Draft') {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot update thesis status. Only admins can change status.'
+        });
+      }
+    }
+
+    // Only allow updates if thesis is in draft status (unless admin)
+    if (thesis.status !== 'Draft' && req.user.role !== 'admin' && !req.body.status) {
       return res.status(400).json({
         success: false,
         message: 'Cannot update thesis that is not in draft status'
@@ -362,23 +527,91 @@ router.put('/:id', protect, [
     if (req.body.title) updateData.title = req.body.title;
     if (req.body.abstract) updateData.abstract = req.body.abstract;
     if (req.body.keywords) updateData.keywords = req.body.keywords;
+    if (req.body.department) updateData.department = req.body.department;
+    if (req.body.program) updateData.program = req.body.program;
+    if (req.body.academicYear) updateData.academic_year = req.body.academicYear;
+    if (req.body.semester) updateData.semester = req.body.semester;
+    if (req.body.category) updateData.category = req.body.category;
+    if (req.body.adviserId) updateData.adviser_id = req.body.adviserId;
+    if (req.body.status) updateData.status = req.body.status;
+    if (req.body.isPublic !== undefined) updateData.is_public = req.body.isPublic;
 
-    const updatedThesis = await Thesis.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    ).populate([
-      { path: 'authors', select: 'firstName lastName' },
-      { path: 'adviser', select: 'firstName lastName' }
-    ]);
+    // Update thesis
+    await thesis.update(updateData);
+
+    // Reload with associations
+    await thesis.reload({
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id', 'firstName', 'lastName'],
+          through: { attributes: [] }
+        },
+        {
+          model: User,
+          as: 'adviser',
+          attributes: ['id', 'firstName', 'lastName']
+        }
+      ]
+    });
 
     res.json({
       success: true,
       message: 'Thesis updated successfully',
-      data: updatedThesis
+      data: thesis
     });
   } catch (error) {
     console.error('Update thesis error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @desc    Delete thesis - ALL ROLES CAN DELETE (authors and admin)
+// @route   DELETE /api/thesis/:id
+// @access  Private (Authors, Admin)
+router.delete('/:id', protect, async (req, res) => {
+  try {
+    const thesis = await Thesis.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id'],
+          through: { attributes: [] }
+        }
+      ]
+    });
+
+    if (!thesis) {
+      return res.status(404).json({
+        success: false,
+        message: 'Thesis not found'
+      });
+    }
+
+    // Check if user is author or admin
+    const authorIds = thesis.authors.map(a => a.id);
+    const isAuthor = authorIds.includes(req.user.id);
+    
+    if (!isAuthor && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to delete this thesis'
+      });
+    }
+
+    await thesis.destroy();
+
+    res.json({
+      success: true,
+      message: 'Thesis deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete thesis error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -391,7 +624,16 @@ router.put('/:id', protect, [
 // @access  Private (Thesis authors)
 router.put('/:id/submit', protect, async (req, res) => {
   try {
-    const thesis = await Thesis.findById(req.params.id);
+    const thesis = await Thesis.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id'],
+          through: { attributes: [] }
+        }
+      ]
+    });
 
     if (!thesis) {
       return res.status(404).json({
@@ -401,19 +643,19 @@ router.put('/:id/submit', protect, async (req, res) => {
     }
 
     // Check if user is author
-    const isAuthor = thesis.authors.some(author => author.toString() === req.user.id);
-    if (!isAuthor) {
+    const authorIds = thesis.authors.map(a => a.id);
+    if (!authorIds.includes(req.user.id)) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to submit this thesis'
       });
     }
 
-    // Check if thesis has required document
-    if (!thesis.files.mainDocument) {
+    // Check if thesis has required document (optional check)
+    if (!thesis.mainDocument) {
       return res.status(400).json({
         success: false,
-        message: 'Main document is required before submission'
+        message: 'Main document is recommended before submission'
       });
     }
 
@@ -436,53 +678,52 @@ router.put('/:id/submit', protect, async (req, res) => {
   }
 });
 
-// @desc    Download thesis document
-// @route   GET /api/thesis/:id/download
-// @access  Public
-router.get('/:id/download', async (req, res) => {
-  try {
-    const thesis = await Thesis.findById(req.params.id);
-
-    if (!thesis) {
-      return res.status(404).json({
-        success: false,
-        message: 'Thesis not found'
-      });
-    }
-
-    if (!thesis.files.mainDocument) {
-      return res.status(404).json({
-        success: false,
-        message: 'Document not available'
-      });
-    }
-
-    // Increment download count
-    await thesis.incrementDownloadCount();
-
-    // Set headers for file download
-    res.setHeader('Content-Disposition', `attachment; filename="${thesis.files.mainDocument.originalName}"`);
-    res.setHeader('Content-Type', thesis.files.mainDocument.mimetype);
-
-    // Send file
-    res.sendFile(path.resolve(thesis.files.mainDocument.path));
-  } catch (error) {
-    console.error('Download thesis error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
-
 // @desc    Get user's theses
 // @route   GET /api/thesis/user/my-theses
 // @access  Private
 router.get('/user/my-theses', protect, async (req, res) => {
   try {
-    const theses = await Thesis.find({ authors: req.user.id })
-      .populate('adviser', 'firstName lastName')
-      .sort({ createdAt: -1 });
+    const { Op } = require('sequelize');
+    const { ThesisAuthors } = require('../models');
+    
+    // Get all thesis IDs where the user is an author
+    const authorTheses = await ThesisAuthors.findAll({
+      where: { user_id: req.user.id },
+      attributes: ['thesis_id', 'user_id']
+    });
+    
+    const thesisIds = authorTheses.map(at => at.thesis_id);
+    
+    if (thesisIds.length === 0) {
+      return res.json({
+        success: true,
+        count: 0,
+        data: []
+      });
+    }
+    
+    const theses = await Thesis.findAll({
+      where: {
+        id: {
+          [Op.in]: thesisIds
+        }
+      },
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id', 'firstName', 'lastName'],
+          through: { attributes: [] }
+        },
+        {
+          model: User,
+          as: 'adviser',
+          attributes: ['id', 'firstName', 'lastName'],
+          required: false
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
 
     res.json({
       success: true,
@@ -491,6 +732,105 @@ router.get('/user/my-theses', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Get user theses error:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// @desc    Download thesis document with integrity verification
+// @route   GET /api/thesis/:id/download
+// @access  Private (Public theses can be downloaded by anyone, private only by authors/admin)
+router.get('/:id/download', protect, async (req, res) => {
+  try {
+    const thesis = await Thesis.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id'],
+          through: { attributes: [] }
+        }
+      ]
+    });
+
+    if (!thesis) {
+      return res.status(404).json({
+        success: false,
+        message: 'Thesis not found'
+      });
+    }
+
+    // Check if user can download this thesis
+    if (!thesis.is_public && thesis.status !== 'Published') {
+      if (!req.user || (req.user.role !== 'admin')) {
+        // Check if user is author
+        const authorIds = thesis.authors.map(a => a.id);
+        if (!authorIds.includes(req.user?.id)) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied'
+          });
+        }
+      }
+    }
+
+    // Check if document exists
+    if (!thesis.main_document || !thesis.main_document.path) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    const filePath = thesis.main_document.path;
+
+    // Verify file exists
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found on server'
+      });
+    }
+
+    // Verify file integrity (Objective 1.4: Prevent data corruption)
+    if (thesis.main_document.checksum) {
+      const isIntegrityValid = verifyFileIntegrity(filePath, thesis.main_document.checksum);
+      if (!isIntegrityValid) {
+        console.error(`File integrity check failed for thesis ${thesis.id}`);
+        return res.status(500).json({
+          success: false,
+          message: 'File integrity verification failed. The file may be corrupted. Please contact the administrator.'
+        });
+      }
+    }
+
+    // Increment download count
+    await thesis.incrementDownloadCount();
+
+    // Log file download (Objective 5.5: Audit logging)
+    await logFileOperation(req, 'thesis.download', thesis.id, 'success');
+
+    // Send file
+    const fileName = thesis.main_document.originalName || `thesis-${thesis.id}.pdf`;
+    res.download(filePath, fileName, (err) => {
+      if (err) {
+        console.error('Error downloading file:', err);
+        // Log download failure
+        logFileOperation(req, 'thesis.download', thesis.id, 'failure', err.message).catch(console.error);
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            message: 'Error downloading file'
+          });
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Download thesis error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'

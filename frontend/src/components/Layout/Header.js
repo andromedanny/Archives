@@ -180,13 +180,16 @@ const Header = () => {
             <div className="relative ml-4" ref={desktopDropdownRef}>
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-gray-100 transition-colors"
+                className={`flex items-center gap-3 px-3 py-1.5 rounded-full transition-all duration-200 ${
+                  isDropdownOpen ? 'bg-blue-50 shadow-inner ring-1 ring-blue-200' : 'hover:bg-gray-100'
+                }`}
               >
-                <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold text-sm">
+                <div className="h-11 w-11 rounded-full bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 flex items-center justify-center text-white font-semibold text-lg shadow-md">
                   {getUserInitials()}
                 </div>
+                <span className="text-base font-medium text-gray-700 hidden lg:inline">{getUserDisplayName().split(' ')[0]}</span>
                 <ChevronDownIcon 
-                  className={`h-4 w-4 text-gray-600 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
+                  className={`h-5 w-5 text-gray-600 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
                 />
               </button>
 
@@ -240,9 +243,11 @@ const Header = () => {
             <div className="relative" ref={mobileDropdownRef}>
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="flex items-center gap-2"
+                className={`flex items-center gap-2 px-2 py-1 rounded-full transition-all duration-200 ${
+                  isDropdownOpen ? 'bg-blue-50 shadow-inner ring-1 ring-blue-200' : 'hover:bg-gray-100'
+                }`}
               >
-                <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold text-sm">
+                <div className="h-11 w-11 rounded-full bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 flex items-center justify-center text-white font-semibold text-lg shadow-md">
                   {getUserInitials()}
                 </div>
               </button>

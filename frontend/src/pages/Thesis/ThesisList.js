@@ -4,81 +4,94 @@ import { Helmet } from 'react-helmet-async';
 import Header from '../../components/Layout/Header';
 import Footer from '../../components/Layout/Footer';
 import BackgroundImage from '../../components/UI/BackgroundImage';
+import { thesisAPI } from '../../services/api';
+import toast from 'react-hot-toast';
 
 const ThesisList = () => {
   const [theses, setTheses] = useState([]);
-  const [filteredTheses, setFilteredTheses] = useState([]);
   const [filters, setFilters] = useState({
-    course: '',
-    year: '',
-    search: ''
+    search: '',
+    keywords: '',
+    program: '',
+    department: '',
+    academicYear: '',
+    category: '',
+    dateFrom: '',
+    dateTo: ''
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const itemsPerPage = 10;
 
-  // Mock data - replace with actual API call
-  useEffect(() => {
-    const mockTheses = [
-      {
-        id: 1,
-        title: "Machine Learning Applications in Healthcare",
-        authors: "John Doe, Jane Smith",
-        course: "BSCS",
-        year: "2023",
-        submissionDate: "2023-05-15"
-      },
-      {
-        id: 2,
-        title: "Web Development Best Practices",
-        authors: "Alice Johnson",
-        course: "BSIT",
-        year: "2023",
-        submissionDate: "2023-06-20"
-      },
-      {
-        id: 3,
-        title: "Game Development Using Unity",
-        authors: "Bob Wilson, Carol Brown",
-        course: "BSEMC",
-        year: "2022",
-        submissionDate: "2022-12-10"
+  const fetchTheses = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Build query parameters (Objective 5.3: Advanced search)
+      const params = {
+        page: currentPage,
+        limit: itemsPerPage,
+        ...(filters.search && { search: filters.search }),
+        ...(filters.keywords && { keywords: filters.keywords }),
+        ...(filters.program && { program: filters.program }),
+        ...(filters.department && { department: filters.department }),
+        ...(filters.academicYear && { academicYear: filters.academicYear }),
+        ...(filters.category && { category: filters.category }),
+        ...(filters.dateFrom && { dateFrom: filters.dateFrom }),
+        ...(filters.dateTo && { dateTo: filters.dateTo })
+      };
+
+      const response = await thesisAPI.getTheses(params);
+      if (response.data.success) {
+        setTheses(response.data.data || []);
+        setTotalCount(response.data.total || 0);
+        setTotalPages(response.data.pages || 1);
+      } else {
+        setTheses([]);
+        setTotalCount(0);
+        setTotalPages(1);
       }
-    ];
-    
-    setTheses(mockTheses);
-    setFilteredTheses(mockTheses);
-    setIsLoading(false);
-  }, []);
+    } catch (error) {
+      console.error('Error fetching theses:', error);
+      setTheses([]);
+      setTotalCount(0);
+      setTotalPages(1);
+      if (error.response?.status !== 401) {
+        toast.error('Failed to load theses');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  // Filter theses based on current filters
+  // Fetch theses when filters or page changes (Objective 5.3: Advanced search)
   useEffect(() => {
-    let filtered = theses;
-
-    if (filters.course) {
-      filtered = filtered.filter(thesis => thesis.course === filters.course);
-    }
-
-    if (filters.year) {
-      filtered = filtered.filter(thesis => thesis.year === filters.year);
-    }
-
-    if (filters.search) {
-      filtered = filtered.filter(thesis => 
-        thesis.title.toLowerCase().includes(filters.search.toLowerCase()) ||
-        thesis.authors.toLowerCase().includes(filters.search.toLowerCase())
-      );
-    }
-
-    setFilteredTheses(filtered);
-    setCurrentPage(1);
-  }, [filters, theses]);
+    fetchTheses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, filters.search, filters.keywords, filters.program, filters.department, filters.academicYear, filters.category, filters.dateFrom, filters.dateTo]);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({
       ...prev,
       [key]: value
     }));
+    setCurrentPage(1); // Reset to first page when filters change
+  };
+
+  const handleClearFilters = () => {
+    setFilters({
+      search: '',
+      keywords: '',
+      program: '',
+      department: '',
+      academicYear: '',
+      category: '',
+      dateFrom: '',
+      dateTo: ''
+    });
+    setCurrentPage(1);
   };
 
   const handleView = (thesisId) => {
@@ -91,10 +104,11 @@ const ThesisList = () => {
     console.log('Download thesis:', thesisId);
   };
 
-  // Pagination
-  const totalPages = Math.ceil(filteredTheses.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedTheses = filteredTheses.slice(startIndex, startIndex + itemsPerPage);
+  // Pagination handlers
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <>
@@ -106,47 +120,132 @@ const ThesisList = () => {
       <BackgroundImage />
       <Header />
       
-      <main className="min-h-screen pt-16 pb-20">
-        <div className="w-11/12 max-w-6xl mx-auto mt-8">
+      <main className="min-h-screen pt-16 pb-20" style={{ position: 'relative', zIndex: 1 }}>
+        <div className="w-11/12 max-w-7xl mx-auto mt-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg"
+            className="bg-white p-6 rounded-xl shadow-lg border border-gray-100"
           >
             <h1 className="text-3xl font-bold text-gray-800 mb-6">Thesis List</h1>
             
-            {/* Filters */}
-            <div className="flex flex-wrap gap-4 mb-6">
-              <select
-                value={filters.course}
-                onChange={(e) => handleFilterChange('course', e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[200px]"
-              >
-                <option value="">All Courses</option>
-                <option value="BSCS">Computer Science</option>
-                <option value="BSIT">Information Technology</option>
-                <option value="BSEMC">Entertainment and Multimedia Computing</option>
-              </select>
-              
-              <select
-                value={filters.year}
-                onChange={(e) => handleFilterChange('year', e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[150px]"
-              >
-                <option value="">All Years</option>
-                <option value="2023">2023</option>
-                <option value="2022">2022</option>
-                <option value="2021">2021</option>
-              </select>
-              
-              <input
-                type="text"
-                value={filters.search}
-                onChange={(e) => handleFilterChange('search', e.target.value)}
-                placeholder="Search thesis title..."
-                className="flex-1 min-w-[300px] px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+            {/* Advanced Search Filters (Objective 5.3: Advanced search) */}
+            <div className="mb-6 space-y-4">
+              {/* Basic Search */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Search Title/Abstract
+                  </label>
+                  <input
+                    type="text"
+                    value={filters.search}
+                    onChange={(e) => handleFilterChange('search', e.target.value)}
+                    placeholder="Search thesis title or abstract..."
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Keywords (comma-separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={filters.keywords}
+                    onChange={(e) => handleFilterChange('keywords', e.target.value)}
+                    placeholder="e.g., AI, Machine Learning, Healthcare"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Date Range Filter */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Date From
+                  </label>
+                  <input
+                    type="date"
+                    value={filters.dateFrom}
+                    onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Date To
+                  </label>
+                  <input
+                    type="date"
+                    value={filters.dateTo}
+                    onChange={(e) => handleFilterChange('dateTo', e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Category and Program Filters */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Program
+                  </label>
+                  <select
+                    value={filters.program}
+                    onChange={(e) => handleFilterChange('program', e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All Programs</option>
+                    <option value="BSCS">BSCS</option>
+                    <option value="BSIT">BSIT</option>
+                    <option value="BSEMC">BSEMC</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Academic Year
+                  </label>
+                  <input
+                    type="text"
+                    value={filters.academicYear}
+                    onChange={(e) => handleFilterChange('academicYear', e.target.value)}
+                    placeholder="e.g., 2024-2025"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Category
+                  </label>
+                  <select
+                    value={filters.category}
+                    onChange={(e) => handleFilterChange('category', e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All Categories</option>
+                    <option value="Undergraduate">Undergraduate</option>
+                    <option value="Graduate">Graduate</option>
+                    <option value="Doctoral">Doctoral</option>
+                    <option value="Research Paper">Research Paper</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Clear Filters Button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={handleClearFilters}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Clear All Filters
+                </button>
+              </div>
             </div>
 
             {/* Thesis Table */}
@@ -157,6 +256,11 @@ const ThesisList = () => {
               </div>
             ) : (
               <>
+                {/* Results Count */}
+                <div className="mb-4 text-sm text-gray-600">
+                  Showing {theses.length} of {totalCount} theses {totalPages > 1 && `(Page ${currentPage} of ${totalPages})`}
+                </div>
+                
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse">
                     <thead>
@@ -170,36 +274,50 @@ const ThesisList = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {paginatedTheses.map((thesis) => (
-                        <motion.tr
-                          key={thesis.id}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className="hover:bg-gray-50 transition-colors"
-                        >
-                          <td className="px-4 py-3 text-sm text-gray-900 border-b">{thesis.title}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600 border-b">{thesis.authors}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600 border-b">{thesis.course}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600 border-b">{thesis.year}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600 border-b">{thesis.submissionDate}</td>
-                          <td className="px-4 py-3 text-sm border-b">
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => handleView(thesis.id)}
-                                className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                              >
-                                View
-                              </button>
-                              <button
-                                onClick={() => handleDownload(thesis.id)}
-                                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                              >
-                                Download
-                              </button>
-                            </div>
+                      {theses.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
+                            No theses found. Try adjusting your filters.
                           </td>
-                        </motion.tr>
-                      ))}
+                        </tr>
+                      ) : (
+                        theses.map((thesis) => (
+                          <motion.tr
+                            key={thesis.id}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="hover:bg-gray-50 transition-colors"
+                          >
+                            <td className="px-4 py-3 text-sm text-gray-900 border-b">{thesis.title}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600 border-b">
+                              {thesis.authors?.map(a => `${a.firstName} ${a.lastName}`).join(', ') || 'N/A'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600 border-b">{thesis.program || 'N/A'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600 border-b">
+                              {thesis.academic_year || 'N/A'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600 border-b">
+                              {thesis.submitted_at ? new Date(thesis.submitted_at).toLocaleDateString() : 'N/A'}
+                            </td>
+                            <td className="px-4 py-3 text-sm border-b">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleView(thesis.id)}
+                                  className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                                >
+                                  View
+                                </button>
+                                <button
+                                  onClick={() => handleDownload(thesis.id)}
+                                  className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                >
+                                  Download
+                                </button>
+                              </div>
+                            </td>
+                          </motion.tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>

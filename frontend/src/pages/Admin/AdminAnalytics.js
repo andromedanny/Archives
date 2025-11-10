@@ -4,6 +4,8 @@ import { Helmet } from 'react-helmet-async';
 import Header from '../../components/Layout/Header';
 import Footer from '../../components/Layout/Footer';
 import BackgroundImage from '../../components/UI/BackgroundImage';
+import { adminAPI } from '../../services/api';
+import toast from 'react-hot-toast';
 
 const AdminAnalytics = () => {
   const [analytics, setAnalytics] = useState({
@@ -15,23 +17,42 @@ const AdminAnalytics = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Mock data - replace with actual API call
-    const mockAnalytics = {
-      totalTheses: 150,
-      totalUsers: 45,
-      totalDownloads: 1250,
-      monthlySubmissions: [
-        { month: 'Jan', count: 12 },
-        { month: 'Feb', count: 18 },
-        { month: 'Mar', count: 15 },
-        { month: 'Apr', count: 22 },
-        { month: 'May', count: 28 },
-        { month: 'Jun', count: 35 }
-      ]
+    const fetchAnalytics = async () => {
+      try {
+        setIsLoading(true);
+        const response = await adminAPI.getAnalytics();
+        if (response.data.success) {
+          setAnalytics(response.data.data || {
+            totalTheses: 0,
+            totalUsers: 0,
+            totalDownloads: 0,
+            monthlySubmissions: []
+          });
+        } else {
+          setAnalytics({
+            totalTheses: 0,
+            totalUsers: 0,
+            totalDownloads: 0,
+            monthlySubmissions: []
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching analytics:', error);
+        setAnalytics({
+          totalTheses: 0,
+          totalUsers: 0,
+          totalDownloads: 0,
+          monthlySubmissions: []
+        });
+        if (error.response?.status !== 401) {
+          toast.error('Failed to load analytics');
+        }
+      } finally {
+        setIsLoading(false);
+      }
     };
-    
-    setAnalytics(mockAnalytics);
-    setIsLoading(false);
+
+    fetchAnalytics();
   }, []);
 
   if (isLoading) {
@@ -57,13 +78,13 @@ const AdminAnalytics = () => {
       <BackgroundImage />
       <Header />
       
-      <main className="min-h-screen pt-16 pb-20">
-        <div className="w-11/12 max-w-6xl mx-auto mt-8">
+      <main className="min-h-screen pt-16 pb-20" style={{ position: 'relative', zIndex: 1 }}>
+        <div className="w-11/12 max-w-7xl mx-auto mt-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="bg-white/95 backdrop-blur-sm p-6 rounded-lg shadow-lg"
+            className="bg-white p-6 rounded-xl shadow-lg border border-gray-100"
           >
             <h1 className="text-3xl font-bold text-gray-800 mb-8">Analytics Dashboard</h1>
             
@@ -73,40 +94,42 @@ const AdminAnalytics = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
-                className="bg-blue-50 p-6 rounded-lg"
+                className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-xl border border-blue-200 shadow-md hover:shadow-lg transition-shadow"
               >
                 <div className="text-3xl font-bold text-blue-600">{analytics.totalTheses}</div>
-                <div className="text-sm text-gray-600">Total Theses</div>
+                <div className="text-sm text-gray-600 mt-1">Total Theses</div>
               </motion.div>
               
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
-                className="bg-green-50 p-6 rounded-lg"
+                className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-xl border border-green-200 shadow-md hover:shadow-lg transition-shadow"
               >
                 <div className="text-3xl font-bold text-green-600">{analytics.totalUsers}</div>
-                <div className="text-sm text-gray-600">Total Users</div>
+                <div className="text-sm text-gray-600 mt-1">Total Users</div>
               </motion.div>
               
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
-                className="bg-purple-50 p-6 rounded-lg"
+                className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-xl border border-purple-200 shadow-md hover:shadow-lg transition-shadow"
               >
                 <div className="text-3xl font-bold text-purple-600">{analytics.totalDownloads}</div>
-                <div className="text-sm text-gray-600">Total Downloads</div>
+                <div className="text-sm text-gray-600 mt-1">Total Downloads</div>
               </motion.div>
               
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.4 }}
-                className="bg-orange-50 p-6 rounded-lg"
+                className="bg-gradient-to-br from-orange-50 to-orange-100 p-6 rounded-xl border border-orange-200 shadow-md hover:shadow-lg transition-shadow"
               >
-                <div className="text-3xl font-bold text-orange-600">85%</div>
-                <div className="text-sm text-gray-600">Active Users</div>
+                <div className="text-3xl font-bold text-orange-600">
+                  {analytics.totalUsers > 0 ? Math.round((analytics.totalUsers / analytics.totalUsers) * 100) : 0}%
+                </div>
+                <div className="text-sm text-gray-600 mt-1">Active Users</div>
               </motion.div>
             </div>
 
@@ -120,20 +143,27 @@ const AdminAnalytics = () => {
               >
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Monthly Submissions</h3>
                 <div className="space-y-3">
-                  {analytics.monthlySubmissions.map((item, index) => (
-                    <div key={item.month} className="flex items-center">
-                      <div className="w-12 text-sm text-gray-600">{item.month}</div>
-                      <div className="flex-1 mx-4">
-                        <div className="bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full" 
-                            style={{ width: `${(item.count / 35) * 100}%` }}
-                          ></div>
+                  {analytics.monthlySubmissions && analytics.monthlySubmissions.length > 0 ? (
+                    analytics.monthlySubmissions.map((item, index) => {
+                      const maxCount = Math.max(...analytics.monthlySubmissions.map(m => m.count), 1);
+                      return (
+                        <div key={item.month || index} className="flex items-center">
+                          <div className="w-12 text-sm text-gray-600">{item.month}</div>
+                          <div className="flex-1 mx-4">
+                            <div className="bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-blue-600 h-2 rounded-full" 
+                                style={{ width: `${(item.count / maxCount) * 100}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                          <div className="w-8 text-sm text-gray-600">{item.count}</div>
                         </div>
-                      </div>
-                      <div className="w-8 text-sm text-gray-600">{item.count}</div>
-                    </div>
-                  ))}
+                      );
+                    })
+                  ) : (
+                    <p className="text-gray-500 text-sm">No submission data available</p>
+                  )}
                 </div>
               </motion.div>
               

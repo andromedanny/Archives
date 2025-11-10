@@ -24,18 +24,43 @@ const Login = () => {
     e.preventDefault();
     setError('');
 
+    console.log('Login form submitted:', { email: formData.email });
     const result = await login(formData);
+    console.log('Login result:', result);
     
     if (result.success) {
-      // Redirect based on user role
-      const user = JSON.parse(localStorage.getItem('user'));
-      if (user?.role === 'admin') {
-        navigate('/admin');
-      } else {
-        navigate('/dashboard');
+      // Wait longer for state to update and context to initialize
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Double-check token is stored
+      const token = localStorage.getItem('token');
+      const storedUser = localStorage.getItem('user');
+      
+      if (!token || !storedUser) {
+        console.error('Token or user not stored after login');
+        setError('Failed to store authentication. Please try again.');
+        return;
+      }
+      
+      try {
+        const user = result.user || JSON.parse(storedUser);
+        console.log('Redirecting user:', user);
+        
+        // Redirect based on user role
+        if (user?.role === 'admin') {
+          console.log('Navigating to /admin');
+          navigate('/admin', { replace: true });
+        } else {
+          console.log('Navigating to /dashboard');
+          navigate('/dashboard', { replace: true });
+        }
+      } catch (err) {
+        console.error('Error parsing user data:', err);
+        setError('Failed to parse user data. Please try again.');
       }
     } else {
-      setError(result.error);
+      console.error('Login failed:', result.error);
+      setError(result.error || 'Login failed. Please check your credentials.');
     }
   };
 
@@ -66,15 +91,15 @@ const Login = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
+                School ID
               </label>
               <input
-                type="email"
+                type="text"
                 id="email"
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                placeholder="Enter your email"
+                placeholder="Enter your School ID"
                 required
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300"
               />
