@@ -18,6 +18,10 @@ const courseRoutes = require('./routes/courses');
 
 const app = express();
 
+// Trust proxy - Required for Render, Vercel, and other hosting platforms that use reverse proxies
+// This allows express-rate-limit to correctly identify client IPs
+app.set('trust proxy', true);
+
 // Security middleware
 app.use(helmet());
 app.use(compression());
@@ -26,7 +30,9 @@ app.use(compression());
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Higher limit in development
-  message: 'Too many requests from this IP, please try again later.'
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 app.use('/api/', limiter);
 
