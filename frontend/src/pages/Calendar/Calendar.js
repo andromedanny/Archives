@@ -90,10 +90,10 @@ const Calendar = () => {
         <title>Calendar - FAITH Colleges Thesis Archive</title>
         <meta name="description" content="View the academic calendar." />
       </Helmet>
-
+      
       <BackgroundImage />
       <Header />
-
+      
       <main
         className="min-h-screen pt-16 pb-20"
         style={{ position: 'relative', zIndex: 1 }}
@@ -121,8 +121,8 @@ const Calendar = () => {
               <div className="flex items-center gap-2">
                 <label htmlFor="month" className="text-sm font-medium text-gray-600">
                   Month
-                </label>
-                <select
+              </label>
+              <select
                   id="month"
                   value={monthInput}
                   onChange={(e) => setMonthInput(Number(e.target.value))}
@@ -132,9 +132,9 @@ const Calendar = () => {
                     <option key={index} value={index + 1}>
                       {new Date(0, index).toLocaleDateString('en-US', { month: 'long' })}
                     </option>
-                  ))}
-                </select>
-              </div>
+                ))}
+              </select>
+            </div>
               <div className="flex items-center gap-2">
                 <label htmlFor="year" className="text-sm font-medium text-gray-600">
                   Year
@@ -200,7 +200,7 @@ const Calendar = () => {
                         {eventsForDay.length === 0
                           ? 'Departments can populate thesis events for this date.'
                           : `${eventsForDay.length} event${eventsForDay.length > 1 ? 's' : ''}`}
-                      </div>
+                  </div>
                     {eventsForDay.length > 0 && (
                       <div className="px-10 pb-4">
                         <div className="space-y-3">
@@ -216,19 +216,19 @@ const Calendar = () => {
                               {event.description && (
                                 <p className="text-xs text-gray-500 mt-1">{event.description}</p>
                               )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
+                ))}
+              </div>
+            </div>
+                        )}
+                      </div>
                 );
               })}
             </div>
           </motion.div>
         </div>
       </main>
-
+      
       <Footer />
     </>
   );

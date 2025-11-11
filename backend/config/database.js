@@ -32,11 +32,15 @@ if (process.env.DATABASE_URL) {
   
   // SSL configuration for cloud databases
   if (isPostgres) {
-    // Supabase requires SSL
+    // Supabase requires SSL - use pooler connection for better compatibility
+    // Connection pooler works better with Render and avoids IPv6 issues
     dialectOptions.ssl = process.env.DB_SSL !== 'false' ? {
       require: true,
       rejectUnauthorized: false
     } : false;
+    
+    // Additional options for Supabase pooler compatibility
+    dialectOptions.connectTimeout = 10000; // 10 seconds timeout
   } else {
     // MySQL SSL
     dialectOptions.ssl = process.env.DB_SSL === 'true' ? {
@@ -53,7 +57,9 @@ if (process.env.DATABASE_URL) {
       max: 5,
       min: 0,
       acquire: 30000,
-      idle: 10000
+      idle: 10000,
+      // Increase timeout for pooler connections
+      evict: 1000
     },
     define: {
       timestamps: true,
@@ -123,8 +129,17 @@ const connectDB = async () => {
     }
     // Otherwise, skip sync silently - tables already exist
   } catch (error) {
-    console.error('Database connection error:', error);
-    process.exit(1);
+    console.error('Database connection error:', error.message);
+    // Don't exit process - allow server to start even if DB connection fails
+    // This allows health endpoint to work and logs can be checked
+    console.warn('⚠️  Server will continue without database connection. Some features may not work.');
+    // Try to reconnect in background (optional)
+    setTimeout(() => {
+      console.log('Attempting to reconnect to database...');
+      connectDB().catch(err => {
+        console.error('Reconnection failed:', err.message);
+      });
+    }, 5000);
   }
 };
 

@@ -51,8 +51,13 @@ if (process.env.STORAGE_TYPE === 'local' || !process.env.STORAGE_TYPE) {
   app.use('/uploads', express.static('uploads'));
 }
 
-// Database connection
-connectDB();
+// Database connection (non-blocking - server starts even if DB connection fails)
+// This allows health endpoint to work even if database isn't set up yet
+connectDB().catch(err => {
+  console.error('Initial database connection failed:', err.message);
+  console.warn('Server will continue running. Database connection will be retried.');
+  console.warn('⚠️  Some API endpoints may not work until database is connected.');
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
