@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import Header from '../../components/Layout/Header';
 import BackgroundImage from '../../components/UI/BackgroundImage';
 import LoadingSpinner from '../../components/UI/LoadingSpinner';
-import { dashboardAPI, thesisAPI } from '../../services/api';
+import { dashboardAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 import { 
   BookOpenIcon, 
@@ -19,7 +19,6 @@ import {
   PlusIcon,
   CalendarIcon,
   DocumentTextIcon,
-  MagnifyingGlassIcon
 } from '@heroicons/react/24/outline';
 
 const Dashboard = () => {
@@ -38,10 +37,6 @@ const Dashboard = () => {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showSearchResults, setShowSearchResults] = useState(false);
 
   useEffect(() => {
     console.log('Dashboard: Component mounted, fetching data...');
@@ -276,53 +271,6 @@ const Dashboard = () => {
     }
   };
 
-  // Search theses function for students - filter by same department
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!searchTerm.trim()) {
-      setShowSearchResults(false);
-      return;
-    }
-
-    try {
-      setIsSearching(true);
-      setShowSearchResults(true);
-      
-      // Build filters based on user's department only
-      const filters = {};
-      if (currentUser?.department) {
-        filters.department = currentUser.department;
-      }
-      
-      const response = await thesisAPI.searchTheses(searchTerm.trim(), filters);
-      if (response.data.success) {
-        setSearchResults(response.data.data || []);
-      } else {
-        setSearchResults([]);
-      }
-    } catch (error) {
-      console.error('Error searching theses:', error);
-      setSearchResults([]);
-      toast.error('Failed to search theses');
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  // Format authors for display
-  const formatAuthors = (authors) => {
-    if (Array.isArray(authors) && authors.length > 0) {
-      if (authors.length === 1) {
-        const author = authors[0];
-        return `${author.lastName || ''}${author.lastName && author.firstName ? ', ' : ''}${author.firstName || ''}`.trim();
-      } else {
-        const firstAuthor = authors[0];
-        const surname = firstAuthor.lastName || firstAuthor.firstName || '';
-        return `${surname} (et al.)`;
-      }
-    }
-    return 'N/A';
-  };
 
   const getColorStyles = (color) => {
     const colors = {
@@ -436,7 +384,7 @@ const Dashboard = () => {
               </div>
             </div>
             
-            {/* Search Bar for Students */}
+            {/* Search Thesis Button for Students */}
             {currentUser?.role !== 'admin' && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
@@ -444,73 +392,13 @@ const Dashboard = () => {
                 transition={{ duration: 0.5, delay: 0.2 }}
                 className="mt-6"
               >
-                <form onSubmit={handleSearch} className="relative">
-                  <input
-                    type="text"
-                    placeholder={`Search theses by title, author, or keywords${currentUser?.department ? ` (${currentUser.department})` : ''}...`}
-                    value={searchTerm}
-                    onChange={(e) => {
-                      setSearchTerm(e.target.value);
-                      if (!e.target.value.trim()) {
-                        setShowSearchResults(false);
-                      }
-                    }}
-                    className="w-full px-4 py-3 pl-12 pr-4 bg-white text-gray-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 shadow-lg"
-                  />
-                  <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                  <button
-                    type="submit"
-                    disabled={isSearching}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  >
-                    {isSearching ? 'Searching...' : 'Search'}
-                  </button>
-                </form>
-                
-                {/* Search Results */}
-                {showSearchResults && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-4 bg-white rounded-lg shadow-xl max-h-96 overflow-y-auto"
-                  >
-                    {searchResults.length > 0 ? (
-                      <div className="p-4">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-3">
-                          Search Results ({searchResults.length})
-                        </h3>
-                        <div className="space-y-3">
-                          {searchResults.map((thesis) => (
-                            <motion.div
-                              key={thesis.id}
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors border border-gray-200"
-                              onClick={() => {
-                                navigate(`/thesis/${thesis.id}`);
-                                setShowSearchResults(false);
-                              }}
-                            >
-                              <h4 className="font-semibold text-gray-800 mb-1 line-clamp-2">{thesis.title}</h4>
-                              <p className="text-sm text-gray-600 mb-1">
-                                <strong>Authors:</strong> {formatAuthors(thesis.authors)}
-                              </p>
-                              {thesis.department && (
-                                <p className="text-xs text-gray-500">
-                                  {thesis.department} • {thesis.program || thesis.course}
-                                </p>
-                              )}
-                            </motion.div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-4 text-center text-gray-500">
-                        {isSearching ? 'Searching...' : 'No theses found. Try different keywords.'}
-                      </div>
-                    )}
-                  </motion.div>
-                )}
+                <button
+                  onClick={() => navigate('/thesis')}
+                  className="w-full px-6 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg font-semibold text-lg flex items-center justify-center gap-2"
+                >
+                  <BookOpenIcon className="h-6 w-6" />
+                  Search a Thesis
+                </button>
               </motion.div>
             )}
           </motion.div>
