@@ -19,7 +19,7 @@ const MyTheses = () => {
       console.log('Fetching my theses...');
       const response = await thesisAPI.getMyTheses();
       console.log('My theses response:', response.data);
-      if (response.data.success) {
+      if (response.data && response.data.success) {
         const thesesData = response.data.data || [];
         console.log('Setting theses:', thesesData.length, 'items');
         console.log('Thesis titles:', thesesData.map(t => t.title));
@@ -27,13 +27,38 @@ const MyTheses = () => {
       } else {
         console.log('Response was not successful:', response.data);
         setTheses([]);
+        if (response.data && response.data.message) {
+          toast.error(response.data.message);
+        }
       }
     } catch (error) {
       console.error('Error fetching theses:', error);
       console.error('Error response:', error.response?.data);
-      setTheses([]);
-      if (error.response?.status !== 401) {
-        toast.error('Failed to load your theses');
+      
+      // Handle different error cases
+      if (error.response?.status === 401) {
+        // Authentication error - redirect to login
+        toast.error('Please login to view your theses');
+        setTimeout(() => {
+          window.location.href = '/auth/login';
+        }, 1000);
+      } else if (error.response?.status === 403) {
+        toast.error('You do not have permission to view theses');
+      } else if (error.response?.status === 404) {
+        // No theses found - this is OK, just show empty state
+        setTheses([]);
+      } else if (error.response) {
+        // Server error
+        toast.error(error.response.data?.message || 'Failed to load your theses');
+        setTheses([]);
+      } else if (error.request) {
+        // Network error
+        toast.error('Network error. Please check your connection and try again.');
+        setTheses([]);
+      } else {
+        // Other error
+        toast.error('Failed to load your theses. Please try again.');
+        setTheses([]);
       }
     } finally {
       setIsLoading(false);
@@ -54,7 +79,14 @@ const MyTheses = () => {
 
   const handleDownload = async (thesisId, thesisTitle) => {
     try {
-      const response = await thesisAPI.downloadDocument(thesisId);
+      // Use downloadDocument if available, otherwise fallback to downloadThesis
+      const downloadMethod = thesisAPI.downloadDocument || thesisAPI.downloadThesis;
+      if (!downloadMethod) {
+        toast.error('Download functionality is not available. Please refresh the page.');
+        return;
+      }
+      
+      const response = await downloadMethod(thesisId);
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -67,7 +99,13 @@ const MyTheses = () => {
       toast.success('PDF downloaded successfully');
     } catch (error) {
       console.error('Error downloading PDF:', error);
-      toast.error('Failed to download PDF. The document may not be available.');
+      if (error.response?.status === 404) {
+        toast.error('PDF document not found');
+      } else if (error.response?.status === 403) {
+        toast.error('You do not have permission to download this PDF');
+      } else {
+        toast.error('Failed to download PDF. The document may not be available.');
+      }
     }
   };
 

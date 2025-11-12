@@ -27,7 +27,22 @@ const ThesisDetail = () => {
           
           // Check if thesis has a document
           if (thesisData.main_document && thesisData.main_document.path) {
-            setPdfUrl(thesisAPI.getDocumentUrl(id));
+            // Get the document URL - token will be included in the request via axios interceptor
+            if (thesisAPI.getDocumentUrl) {
+              const documentUrl = thesisAPI.getDocumentUrl(id);
+              // For iframe viewing, we need to include the token in the URL
+              const token = localStorage.getItem('token');
+              const fullUrl = token ? `${documentUrl}?token=${token}` : documentUrl;
+              setPdfUrl(fullUrl);
+            } else {
+              // Fallback: construct URL manually if getDocumentUrl is not available
+              const baseURL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) 
+                ? import.meta.env.VITE_API_URL 
+                : '/api';
+              const token = localStorage.getItem('token');
+              const fullUrl = token ? `${baseURL}/thesis/${id}/view?token=${token}` : `${baseURL}/thesis/${id}/view`;
+              setPdfUrl(fullUrl);
+            }
           }
         } else {
           toast.error('Failed to load thesis');
@@ -35,8 +50,28 @@ const ThesisDetail = () => {
         }
       } catch (error) {
         console.error('Error fetching thesis:', error);
-        toast.error('Failed to load thesis');
-        navigate('/thesis');
+        // Check if it's a function error (missing methods) vs API error
+        if (error.message && error.message.includes('is not a function')) {
+          // This is a code issue - methods missing from build
+          console.error('API methods missing - this is a build issue. Please redeploy the frontend.');
+          toast.error('Some features may not work. Please refresh the page or contact support.');
+          // Don't navigate away - allow user to see what loaded
+        } else if (error.response?.status === 404) {
+          toast.error('Thesis not found');
+          navigate('/thesis');
+        } else if (error.response?.status === 403) {
+          toast.error('You do not have permission to view this thesis');
+          navigate('/thesis');
+        } else if (error.response) {
+          // Server error
+          toast.error('Failed to load thesis. Please try again.');
+        } else if (error.request) {
+          // Network error
+          toast.error('Network error. Please check your connection and try again.');
+        } else {
+          // Other error
+          toast.error('Failed to load thesis. Please try again.');
+        }
       } finally {
         setIsLoading(false);
       }
@@ -49,7 +84,14 @@ const ThesisDetail = () => {
 
   const handleDownload = async () => {
     try {
-      const response = await thesisAPI.downloadDocument(id);
+      // Use downloadDocument if available, otherwise fallback to downloadThesis
+      const downloadMethod = thesisAPI.downloadDocument || thesisAPI.downloadThesis;
+      if (!downloadMethod) {
+        toast.error('Download functionality is not available. Please refresh the page.');
+        return;
+      }
+      
+      const response = await downloadMethod(id);
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -62,7 +104,13 @@ const ThesisDetail = () => {
       toast.success('PDF downloaded successfully');
     } catch (error) {
       console.error('Error downloading PDF:', error);
-      toast.error('Failed to download PDF');
+      if (error.response?.status === 404) {
+        toast.error('PDF document not found');
+      } else if (error.response?.status === 403) {
+        toast.error('You do not have permission to download this PDF');
+      } else {
+        toast.error('Failed to download PDF. Please try again.');
+      }
     }
   };
 
@@ -191,13 +239,22 @@ const ThesisDetail = () => {
                   </button>
                 </div>
                 
-                {showPdf && (
+                {showPdf && pdfUrl && (
                   <div className="border border-gray-300 rounded-lg overflow-hidden" style={{ height: '800px' }}>
                     <iframe
                       src={pdfUrl}
                       className="w-full h-full"
                       title="PDF Viewer"
+                      onError={() => {
+                        toast.error('Failed to load PDF. Please try downloading it instead.');
+                        setShowPdf(false);
+                      }}
                     />
+                  </div>
+                )}
+                {showPdf && !pdfUrl && (
+                  <div className="border border-gray-300 rounded-lg p-8 text-center">
+                    <p className="text-gray-600">PDF not available for viewing. Please download it instead.</p>
                   </div>
                 )}
               </div>

@@ -116,6 +116,18 @@ export const thesisAPI = {
   },
   submitThesis: (id) => api.put(`/thesis/${id}/submit`),
   downloadThesis: (id) => api.get(`/thesis/${id}/download`, { responseType: 'blob' }),
+  downloadDocument: (id) => api.get(`/thesis/${id}/download`, { responseType: 'blob' }),
+  getDocumentUrl: (id) => {
+    // Get the base URL - check environment variable first, then API instance default
+    // In production (Vercel), VITE_API_URL should point to the backend URL (e.g., Render)
+    // In development, it uses the proxy from vite.config.js
+    const baseURL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) 
+      ? import.meta.env.VITE_API_URL 
+      : (api.defaults.baseURL || '/api');
+    // Return the URL - token will be added in query params for iframe viewing
+    // The backend's optionalAuth middleware will check both headers and query params
+    return `${baseURL}/thesis/${id}/view`;
+  },
   getMyTheses: () => api.get('/thesis/user/my-theses'),
   searchTheses: (query, filters) => api.get('/thesis', { params: { search: query, ...filters } }),
 };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
+import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Layout/Header';
 import Footer from '../../components/Layout/Footer';
 import BackgroundImage from '../../components/UI/BackgroundImage';
@@ -8,6 +9,7 @@ import { thesisAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
 const ThesisList = () => {
+  const navigate = useNavigate();
   const [theses, setTheses] = useState([]);
   const [filters, setFilters] = useState({
     search: '',
@@ -44,7 +46,7 @@ const ThesisList = () => {
       };
 
       const response = await thesisAPI.getTheses(params);
-      if (response.data.success) {
+      if (response.data && response.data.success) {
         setTheses(response.data.data || []);
         setTotalCount(response.data.total || 0);
         setTotalPages(response.data.pages || 1);
@@ -52,14 +54,44 @@ const ThesisList = () => {
         setTheses([]);
         setTotalCount(0);
         setTotalPages(1);
+        if (response.data && response.data.message) {
+          toast.error(response.data.message);
+        }
       }
     } catch (error) {
       console.error('Error fetching theses:', error);
-      setTheses([]);
-      setTotalCount(0);
-      setTotalPages(1);
-      if (error.response?.status !== 401) {
-        toast.error('Failed to load theses');
+      console.error('Error response:', error.response?.data);
+      
+      // Handle different error cases
+      if (error.response?.status === 401) {
+        // Authentication error - but thesis list is public, so this shouldn't happen
+        // Just show empty state
+        setTheses([]);
+        setTotalCount(0);
+        setTotalPages(1);
+      } else if (error.response?.status === 403) {
+        toast.error('You do not have permission to view theses');
+        setTheses([]);
+        setTotalCount(0);
+        setTotalPages(1);
+      } else if (error.response) {
+        // Server error
+        toast.error(error.response.data?.message || 'Failed to load theses');
+        setTheses([]);
+        setTotalCount(0);
+        setTotalPages(1);
+      } else if (error.request) {
+        // Network error
+        toast.error('Network error. Please check your connection and try again.');
+        setTheses([]);
+        setTotalCount(0);
+        setTotalPages(1);
+      } else {
+        // Other error
+        toast.error('Failed to load theses. Please try again.');
+        setTheses([]);
+        setTotalCount(0);
+        setTotalPages(1);
       }
     } finally {
       setIsLoading(false);
@@ -96,12 +128,39 @@ const ThesisList = () => {
 
   const handleView = (thesisId) => {
     // Navigate to thesis detail page
-    console.log('View thesis:', thesisId);
+    navigate(`/thesis/${thesisId}`);
   };
 
-  const handleDownload = (thesisId) => {
-    // Handle download
-    console.log('Download thesis:', thesisId);
+  const handleDownload = async (thesisId, thesisTitle) => {
+    try {
+      // Use downloadDocument if available, otherwise fallback to downloadThesis
+      const downloadMethod = thesisAPI.downloadDocument || thesisAPI.downloadThesis;
+      if (!downloadMethod) {
+        toast.error('Download functionality is not available. Please refresh the page.');
+        return;
+      }
+      
+      const response = await downloadMethod(thesisId);
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${thesisTitle || 'thesis'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success('PDF downloaded successfully');
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      if (error.response?.status === 404) {
+        toast.error('PDF document not found');
+      } else if (error.response?.status === 403) {
+        toast.error('You do not have permission to download this PDF');
+      } else {
+        toast.error('Failed to download PDF. The document may not be available.');
+      }
+    }
   };
 
   // Pagination handlers
@@ -307,12 +366,14 @@ const ThesisList = () => {
                                 >
                                   View
                                 </button>
-                                <button
-                                  onClick={() => handleDownload(thesis.id)}
-                                  className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                                >
-                                  Download
-                                </button>
+                                {thesis.main_document && thesis.main_document.path && (
+                                  <button
+                                    onClick={() => handleDownload(thesis.id, thesis.title)}
+                                    className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                  >
+                                    Download
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </motion.tr>

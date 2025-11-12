@@ -15,22 +15,35 @@ async function resetDatabase() {
   try {
     console.log('Connecting to database...');
     await sequelize.authenticate();
-    console.log('MySQL database connected successfully');
+    
+    // Detect database type from connection options or DATABASE_URL
+    const dbType = sequelize.options.dialect || 'mysql';
+    const isPostgres = dbType === 'postgres';
+    const dbName = sequelize.config.database || sequelize.config.host || 'unknown';
+    
+    console.log(`${isPostgres ? 'PostgreSQL' : 'MySQL'} database connected successfully`);
+    console.log(`Database: ${dbName}`);
     
     console.log('Starting database reset...');
     console.log('WARNING: This will delete ALL data in the database!');
     
-    // Disable foreign key checks temporarily
-    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
-    
-    // Drop all tables manually to avoid foreign key issues
-    await sequelize.drop();
-    
-    // Re-enable foreign key checks
-    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
-    
-    // Now sync to create all tables
-    await sequelize.sync({ force: false });
+    // Handle foreign key constraints based on database type
+    if (isPostgres) {
+      // PostgreSQL: Use sync with force: true to drop and recreate tables
+      console.log('Dropping and recreating all tables (PostgreSQL)...');
+      // Import models first to ensure they're registered
+      require('../models');
+      // Sync with force: true will drop existing tables and recreate them
+      await sequelize.sync({ force: true });
+    } else {
+      // MySQL: Disable foreign key checks temporarily
+      console.log('Dropping all tables (MySQL)...');
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+      await sequelize.drop();
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+      // Now sync to create all tables
+      await sequelize.sync({ force: false });
+    }
     
     console.log('Database tables recreated');
     

@@ -73,12 +73,19 @@ const authorize = (...roles) => {
 };
 
 // Optional authentication - doesn't fail if no token
+// Also checks query parameters for token (useful for iframe viewing)
 const optionalAuth = async (req, res, next) => {
   try {
     let token;
 
+    // Check for token in headers first
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       token = req.headers.authorization.split(' ')[1];
+    }
+    
+    // Also check query parameters (for iframe viewing)
+    if (!token && req.query.token) {
+      token = req.query.token;
     }
 
     if (token) {

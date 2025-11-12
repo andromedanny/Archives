@@ -73,8 +73,14 @@ export const AuthProvider = ({ children }) => {
       
       if (token && user) {
         try {
-          // Try to verify token with backend
-          const response = await authAPI.getMe();
+          // Try to verify token with backend (with timeout)
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Auth check timeout')), 5000)
+          );
+          
+          const authPromise = authAPI.getMe();
+          
+          const response = await Promise.race([authPromise, timeoutPromise]);
           console.log('Auth check: Backend verification successful');
           dispatch({
             type: 'AUTH_SUCCESS',
@@ -83,23 +89,50 @@ export const AuthProvider = ({ children }) => {
               token,
             },
           });
+          // Update localStorage with fresh user data
+          localStorage.setItem('user', JSON.stringify(response.data.user));
         } catch (error) {
-          // If backend verification fails, use cached user data
+          // If backend verification fails (network error, timeout, etc.), use cached user data
           console.log('Auth check: Backend verification failed, using cached user data', error.message);
           try {
             const parsedUser = JSON.parse(user);
-            dispatch({
-              type: 'AUTH_SUCCESS',
-              payload: {
-                user: parsedUser,
-                token,
-              },
-            });
+            // Only use cached data if it's valid
+            if (parsedUser && parsedUser.id && parsedUser.email) {
+              dispatch({
+                type: 'AUTH_SUCCESS',
+                payload: {
+                  user: parsedUser,
+                  token,
+                },
+              });
+            } else {
+              throw new Error('Invalid cached user data');
+            }
           } catch (parseError) {
             console.error('Auth check: Failed to parse user data', parseError);
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            dispatch({ type: 'AUTH_FAILURE', payload: null });
+            // Only clear storage if it's definitely invalid
+            // Don't clear on network errors - allow offline mode
+            if (error.response && error.response.status === 401) {
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+              dispatch({ type: 'AUTH_FAILURE', payload: null });
+            } else {
+              // Network error - use cached data
+              try {
+                const parsedUser = JSON.parse(user);
+                dispatch({
+                  type: 'AUTH_SUCCESS',
+                  payload: {
+                    user: parsedUser,
+                    token,
+                  },
+                });
+              } catch (e) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                dispatch({ type: 'AUTH_FAILURE', payload: null });
+              }
+            }
           }
         }
       } else {

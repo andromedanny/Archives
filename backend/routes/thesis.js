@@ -741,10 +741,95 @@ router.get('/user/my-theses', protect, async (req, res) => {
   }
 });
 
+// @desc    View thesis document (for inline viewing in browser)
+// @route   GET /api/thesis/:id/view
+// @access  Private (Public theses can be viewed by anyone, private only by authors/admin)
+router.get('/:id/view', optionalAuth, async (req, res) => {
+  try {
+    const thesis = await Thesis.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id'],
+          through: { attributes: [] }
+        }
+      ]
+    });
+
+    if (!thesis) {
+      return res.status(404).json({
+        success: false,
+        message: 'Thesis not found'
+      });
+    }
+
+    // Check if user can view this thesis
+    // Public theses with Published status can be viewed by anyone
+    // Private theses or non-published theses require authentication
+    if (!thesis.is_public || thesis.status !== 'Published') {
+      if (!req.user || (req.user.role !== 'admin')) {
+        // Check if user is author
+        const authorIds = thesis.authors.map(a => a.id);
+        if (!authorIds.includes(req.user?.id)) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied. This thesis is not publicly available.'
+          });
+        }
+      }
+    }
+
+    // Check if document exists
+    if (!thesis.main_document || !thesis.main_document.path) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    const filePath = thesis.main_document.path;
+
+    // Verify file exists
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found on server'
+      });
+    }
+
+    // Set headers for inline viewing (not download)
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${thesis.main_document.originalName || `thesis-${thesis.id}.pdf`}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    
+    // Send file for inline viewing
+    res.sendFile(path.resolve(filePath), (err) => {
+      if (err) {
+        console.error('Error sending file:', err);
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            message: 'Error viewing file'
+          });
+        }
+      }
+    });
+  } catch (error) {
+    console.error('View thesis error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Server error'
+      });
+    }
+  }
+});
+
 // @desc    Download thesis document with integrity verification
 // @route   GET /api/thesis/:id/download
 // @access  Private (Public theses can be downloaded by anyone, private only by authors/admin)
-router.get('/:id/download', protect, async (req, res) => {
+router.get('/:id/download', optionalAuth, async (req, res) => {
   try {
     const thesis = await Thesis.findByPk(req.params.id, {
       include: [
@@ -765,14 +850,16 @@ router.get('/:id/download', protect, async (req, res) => {
     }
 
     // Check if user can download this thesis
-    if (!thesis.is_public && thesis.status !== 'Published') {
+    // Public theses with Published status can be downloaded by anyone
+    // Private theses or non-published theses require authentication
+    if (!thesis.is_public || thesis.status !== 'Published') {
       if (!req.user || (req.user.role !== 'admin')) {
         // Check if user is author
         const authorIds = thesis.authors.map(a => a.id);
         if (!authorIds.includes(req.user?.id)) {
           return res.status(403).json({
             success: false,
-            message: 'Access denied'
+            message: 'Access denied. This thesis is not publicly available.'
           });
         }
       }
