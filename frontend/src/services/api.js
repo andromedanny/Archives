@@ -39,7 +39,14 @@ api.interceptors.response.use(
     
     // Handle network errors (backend not running)
     if (!error.response && error.request) {
-      console.error('Network Error: Backend server is not responding. Please ensure the backend is running on port 5000.');
+      console.error('Network Error: Backend server is not responding.');
+      const backendUrl = api.defaults.baseURL || import.meta.env?.VITE_API_URL || '/api';
+      console.error(`Backend URL: ${backendUrl}`);
+      console.error('Possible causes:');
+      console.error('1. Backend service is sleeping (Render free tier sleeps after 15 min)');
+      console.error('2. Backend service is not running');
+      console.error('3. Backend URL is incorrect');
+      console.error('4. Network connectivity issue');
       // Don't show toast for network errors to avoid spam, let components handle it
     }
     
