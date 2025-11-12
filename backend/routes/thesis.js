@@ -267,11 +267,45 @@ router.get('/:id/view', optionalAuth, async (req, res) => {
 
     const filePath = thesis.main_document.path;
 
+    // Check if using cloud storage (Supabase Storage)
+    // If path is a URL, redirect to it or proxy it
+    if (filePath && (filePath.startsWith('http://') || filePath.startsWith('https://'))) {
+      // Cloud storage URL - redirect to it
+      return res.redirect(filePath);
+    }
+
+    // Local file storage
+    // Resolve absolute path from project root
+    const absolutePath = path.isAbsolute(filePath) 
+      ? filePath 
+      : path.resolve(process.cwd(), filePath);
+
     // Verify file exists
-    if (!fs.existsSync(filePath)) {
+    if (!fs.existsSync(absolutePath)) {
+      console.error('File not found:', absolutePath);
+      console.error('Stored path:', filePath);
+      console.error('Current working directory:', process.cwd());
+      
+      // Check if file might be in uploads directory
+      const uploadsPath = path.resolve(process.cwd(), 'uploads', path.basename(filePath));
+      if (fs.existsSync(uploadsPath)) {
+        // File exists but path was wrong - use correct path
+        const correctPath = uploadsPath;
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${thesis.main_document.originalName || `thesis-${thesis.id}.pdf`}"`);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        return res.sendFile(correctPath);
+      }
+      
       return res.status(404).json({
         success: false,
-        message: 'File not found on server'
+        message: 'File not found on server. The file may have been deleted or the server was redeployed. Please re-upload the document.',
+        details: process.env.NODE_ENV === 'development' ? {
+          storedPath: filePath,
+          absolutePath: absolutePath,
+          cwd: process.cwd(),
+          tip: 'On Render, files are lost on redeploy. Use Supabase Storage for persistent file storage.'
+        } : undefined
       });
     }
 
@@ -281,7 +315,7 @@ router.get('/:id/view', optionalAuth, async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     
     // Send file for inline viewing
-    res.sendFile(path.resolve(filePath), (err) => {
+    res.sendFile(absolutePath, (err) => {
       if (err) {
         console.error('Error sending file:', err);
         if (!res.headersSent) {
