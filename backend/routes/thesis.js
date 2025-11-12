@@ -59,12 +59,32 @@ router.get('/', [
     // Search functionality (Objective 5.3: Advanced search)
     if (req.query.search) {
       const searchTerm = `%${req.query.search}%`;
-      where[Op.or] = [
-        { title: { [Op.like]: searchTerm } },
-        { abstract: { [Op.like]: searchTerm } },
-        // Search in keywords (Objective 5.3: Keyword search)
-        { keywords: { [Op.like]: searchTerm } }
-      ];
+      // Combine search with existing where clause using Op.and
+      const searchConditions = {
+        [Op.or]: [
+          { title: { [Op.like]: searchTerm } },
+          { abstract: { [Op.like]: searchTerm } },
+          // Search in keywords (Objective 5.3: Keyword search)
+          { keywords: { [Op.like]: searchTerm } }
+        ]
+      };
+      // If where already has Op.or, wrap both in Op.and
+      if (where[Op.or]) {
+        where = {
+          [Op.and]: [
+            where,
+            searchConditions
+          ]
+        };
+      } else {
+        // If where is simple, combine with Op.and
+        where = {
+          [Op.and]: [
+            where,
+            searchConditions
+          ]
+        };
+      }
     }
 
     // Keyword search (Objective 5.3: Advanced search with keywords)
@@ -73,14 +93,25 @@ router.get('/', [
         ? req.query.keywords 
         : req.query.keywords.split(',').map(k => k.trim());
       
-      if (!where[Op.or]) {
-        where[Op.or] = [];
+      const keywordConditions = keywords.map(keyword => ({
+        keywords: { [Op.like]: `%${keyword}%` }
+      }));
+      
+      // Combine keyword search with existing where clause
+      const keywordSearchConditions = { [Op.or]: keywordConditions };
+      
+      if (where[Op.and]) {
+        // If where already has Op.and, add keyword search to it
+        where[Op.and].push(keywordSearchConditions);
+      } else {
+        // Wrap both in Op.and
+        where = {
+          [Op.and]: [
+            where,
+            keywordSearchConditions
+          ]
+        };
       }
-      keywords.forEach(keyword => {
-        where[Op.or].push({
-          keywords: { [Op.like]: `%${keyword}%` }
-        });
-      });
     }
 
     // Date range filtering (Objective 5.3: Date range search)
