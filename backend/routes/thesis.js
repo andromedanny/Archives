@@ -387,17 +387,55 @@ router.get('/:id/download', optionalAuth, async (req, res) => {
 
     const filePath = thesis.main_document.path;
 
+    // Check if using cloud storage (Supabase Storage)
+    // If path is a URL, redirect to it
+    if (filePath && (filePath.startsWith('http://') || filePath.startsWith('https://'))) {
+      // Cloud storage URL - redirect to it for download
+      // Increment download count before redirecting
+      await thesis.incrementDownloadCount();
+      await logFileOperation(req, 'thesis.download', thesis.id, 'success');
+      return res.redirect(filePath);
+    }
+
+    // Local file storage
+    // Resolve absolute path from project root
+    const absolutePath = path.isAbsolute(filePath) 
+      ? filePath 
+      : path.resolve(process.cwd(), filePath);
+
     // Verify file exists
-    if (!fs.existsSync(filePath)) {
+    if (!fs.existsSync(absolutePath)) {
+      console.error('File not found for download:', absolutePath);
+      console.error('Stored path:', filePath);
+      console.error('Current working directory:', process.cwd());
+      
+      // Check if file might be in uploads directory
+      const uploadsPath = path.resolve(process.cwd(), 'uploads', path.basename(filePath));
+      if (fs.existsSync(uploadsPath)) {
+        // File exists but path was wrong - use correct path
+        const correctPath = uploadsPath;
+        const fileName = thesis.main_document.originalName || `thesis-${thesis.id}.pdf`;
+        await thesis.incrementDownloadCount();
+        await logFileOperation(req, 'thesis.download', thesis.id, 'success');
+        return res.download(correctPath, fileName);
+      }
+      
       return res.status(404).json({
         success: false,
-        message: 'File not found on server'
+        message: 'File not found on server. The file may have been deleted or the server was redeployed. Please re-upload the document.',
+        details: process.env.NODE_ENV === 'development' ? {
+          storedPath: filePath,
+          absolutePath: absolutePath,
+          cwd: process.cwd(),
+          tip: 'On Render, files are lost on redeploy. Use Supabase Storage for persistent file storage.'
+        } : undefined
       });
     }
 
     // Verify file integrity (Objective 1.4: Prevent data corruption)
+    // Only verify integrity for local files (not URLs)
     if (thesis.main_document.checksum) {
-      const isIntegrityValid = verifyFileIntegrity(filePath, thesis.main_document.checksum);
+      const isIntegrityValid = verifyFileIntegrity(absolutePath, thesis.main_document.checksum);
       if (!isIntegrityValid) {
         console.error(`File integrity check failed for thesis ${thesis.id}`);
         return res.status(500).json({
@@ -415,7 +453,7 @@ router.get('/:id/download', optionalAuth, async (req, res) => {
 
     // Send file
     const fileName = thesis.main_document.originalName || `thesis-${thesis.id}.pdf`;
-    res.download(filePath, fileName, (err) => {
+    res.download(absolutePath, fileName, (err) => {
       if (err) {
         console.error('Error downloading file:', err);
         // Log download failure
