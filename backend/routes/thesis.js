@@ -522,20 +522,28 @@ router.post('/:id/document', protect, uploadThesisDocument, handleUploadError, a
     let fileInfo;
     
     if (storageType === 'supabase') {
-      // Upload to Supabase Storage
-      const { uploadFile: uploadToCloud } = require('../config/cloudStorage');
-      try {
-        fileInfo = await uploadToCloud(req.file, 'thesis/documents');
-        // fileInfo.url contains the public URL
-        // fileInfo.path contains the storage path
-        // Store the URL in the database for Supabase
-      } catch (error) {
-        console.error('Supabase upload error:', error);
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to upload file to cloud storage. Please try again.',
-          error: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
+      // Check if Supabase is configured
+      const { isConfigured } = require('../config/supabaseStorage');
+      if (!isConfigured()) {
+        console.error('Supabase Storage is not configured. Falling back to local storage.');
+        console.error('Please set SUPABASE_URL and SUPABASE_KEY environment variables.');
+        // Fall back to local storage if Supabase is not configured
+        fileInfo = getFileInfo(req.file);
+      } else {
+        // Upload to Supabase Storage
+        const { uploadFile: uploadToCloud } = require('../config/cloudStorage');
+        try {
+          fileInfo = await uploadToCloud(req.file, 'thesis/documents');
+          // fileInfo.url contains the public URL
+          // fileInfo.path contains the storage path
+          // Store the URL in the database for Supabase
+        } catch (error) {
+          console.error('Supabase upload error:', error);
+          console.error('Error details:', error.message, error.stack);
+          // Fall back to local storage if Supabase upload fails
+          console.warn('Falling back to local storage due to Supabase upload error');
+          fileInfo = getFileInfo(req.file);
+        }
       }
     } else {
       // Local storage - get file info (includes checksum for integrity verification - Objective 1.4)
@@ -570,10 +578,26 @@ router.post('/:id/document', protect, uploadThesisDocument, handleUploadError, a
   } catch (error) {
     console.error('Upload document error:', error);
     console.error('Error stack:', error.stack);
+    console.error('Error message:', error.message);
+    
+    // Provide more helpful error messages
+    let errorMessage = 'Failed to upload document. Please try again.';
+    if (error.message && error.message.includes('Supabase')) {
+      errorMessage = 'Failed to upload to cloud storage. Please check Supabase configuration or try again.';
+    } else if (error.message && error.message.includes('bucket')) {
+      errorMessage = 'Storage bucket not found. Please check Supabase Storage configuration.';
+    } else if (error.message && error.message.includes('permission')) {
+      errorMessage = 'Permission denied. Please check Supabase Storage permissions.';
+    }
+    
     res.status(500).json({
       success: false,
-      message: 'Server error',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: errorMessage,
+      error: process.env.NODE_ENV === 'development' ? {
+        message: error.message,
+        stack: error.stack,
+        tip: 'Check Render logs for more details. If using Supabase, verify SUPABASE_URL and SUPABASE_KEY are set correctly.'
+      } : undefined
     });
   }
 });
