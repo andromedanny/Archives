@@ -282,7 +282,8 @@ const AdminTheses = () => {
     const authorsString = Array.isArray(thesis.authors)
       ? thesis.authors.map(author => `${author.firstName || ''} ${author.lastName || ''}`.trim()).join(' ').toLowerCase()
       : (thesis.authors || '').toLowerCase();
-    const matchesSearch = title.includes(searchTerm.toLowerCase()) || authorsString.includes(searchTerm.toLowerCase());
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = !searchTerm || title.includes(searchLower) || authorsString.includes(searchLower);
     const thesisStatus = (thesis.status || '').toLowerCase();
     const matchesStatus = filterStatus === 'all' || thesisStatus === filterStatus || thesisStatus.replace(' ', '_') === filterStatus;
     return matchesSearch && matchesStatus;
@@ -390,9 +391,21 @@ const AdminTheses = () => {
                             {thesis.title}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600 border-b">
-                            {Array.isArray(thesis.authors)
-                              ? thesis.authors.map(author => `${author.firstName || ''} ${author.lastName || ''}`.trim()).filter(Boolean).join(', ')
-                              : thesis.authors}
+                            {(() => {
+                              if (Array.isArray(thesis.authors) && thesis.authors.length > 0) {
+                                // Format as "Surname (et al)" if multiple authors
+                                if (thesis.authors.length === 1) {
+                                  const author = thesis.authors[0];
+                                  return `${author.lastName || ''}${author.lastName && author.firstName ? ', ' : ''}${author.firstName || ''}`.trim();
+                                } else {
+                                  // Get first author's surname
+                                  const firstAuthor = thesis.authors[0];
+                                  const surname = firstAuthor.lastName || firstAuthor.firstName || '';
+                                  return `${surname} (et al.)`;
+                                }
+                              }
+                              return thesis.authors || 'N/A';
+                            })()}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600 border-b">{formatCourseCode(thesis.course || thesis.program)}</td>
                           <td className="px-4 py-3 text-sm text-gray-600 border-b">{formatAcademicYear(thesis.year || thesis.academic_year)}</td>
@@ -418,6 +431,13 @@ const AdminTheses = () => {
                           </td>
                           <td className="px-4 py-3 text-sm border-b">
                             <div className="flex gap-2 flex-wrap">
+                              <button
+                                onClick={() => window.open(`/thesis/${thesis.id}`, '_blank')}
+                                className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                              >
+                                <EyeIcon className="h-4 w-4" />
+                                View
+                              </button>
                               <button
                                 onClick={() => handleEdit(thesis)}
                                 className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
