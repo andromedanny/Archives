@@ -26,14 +26,33 @@ app.set('trust proxy', true);
 app.use(helmet());
 app.use(compression());
 
+// Health check endpoint (define BEFORE rate limiting to exclude it)
+// This endpoint should NOT be rate limited for monitoring purposes
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'One Faith One Archive API is running',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 // Rate limiting - more lenient in development
+// Apply rate limiting to API routes (health endpoint is already defined above)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Higher limit in development
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  skip: (req) => {
+    // Skip rate limiting for health endpoint (already handled above, but keep as safety)
+    const path = req.path || req.originalUrl || '';
+    return path === '/health' || path === '/api/health' || path.endsWith('/health');
+  }
 });
+
+// Apply rate limiting to API routes
 app.use('/api/', limiter);
 
 // CORS configuration
@@ -44,22 +63,51 @@ const allowedOrigins = [
   'http://localhost:5173'
 ].filter(Boolean); // Remove undefined values
 
+// Improved CORS configuration with explicit headers
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+    if (!origin) {
+      return callback(null, true);
+    }
     
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+    // Allow if origin is in allowed list, or in development mode, or always allow in production for now
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'production') {
       callback(null, true);
     } else {
-      console.warn('CORS blocked origin:', origin);
-      callback(null, true); // Allow all origins in production for now (can be restricted later)
+      console.warn('CORS: Unknown origin:', origin);
+      // Still allow but log warning (can be restricted later)
+      callback(null, true);
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Length', 'Content-Type'],
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 200
 }));
+
+// Additional CORS handling for edge cases
+app.use((req, res, next) => {
+  // Always set CORS headers if not already set
+  if (!res.headersSent) {
+    const origin = req.headers.origin;
+    if (origin && (allowedOrigins.includes(origin) || process.env.NODE_ENV === 'production')) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Access-Control-Allow-Credentials', 'true');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+      res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    }
+    
+    // Handle OPTIONS preflight requests
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+  }
+  next();
+});
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -96,15 +144,6 @@ app.use('/api/courses', courseRoutes);
 // Test dashboard route directly
 app.get('/api/dashboard/test-direct', (req, res) => {
   res.json({ message: 'Direct dashboard route works!', timestamp: new Date().toISOString() });
-});
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    message: 'One Faith One Archive API is running',
-    timestamp: new Date().toISOString()
-  });
 });
 
 // Error handling middleware

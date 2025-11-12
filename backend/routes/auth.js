@@ -330,9 +330,17 @@ router.put('/change-password', protect, [
 // @route   GET /api/auth/register-data
 // @access  Public
 router.get('/register-data', async (req, res) => {
+  // Set timeout to prevent hanging requests (10 seconds)
+  let timeout;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeout = setTimeout(() => {
+      reject(new Error('Database query timeout'));
+    }, 10000); // 10 seconds timeout
+  });
+
   try {
-    // Fetch departments with their courses
-    const departments = await Department.findAll({
+    // Fetch departments with their courses with timeout protection
+    const departmentsPromise = Department.findAll({
       where: { is_active: true },
       include: [{
         model: Course,
@@ -343,6 +351,12 @@ router.get('/register-data', async (req, res) => {
       order: [['name', 'ASC']],
       attributes: ['id', 'name', 'code']
     });
+
+    // Race between database query and timeout
+    const departments = await Promise.race([departmentsPromise, timeoutPromise]);
+    
+    // Clear timeout if query completes successfully
+    clearTimeout(timeout);
 
     // Format the response and filter active courses
     const formattedData = departments.map(dept => {
@@ -361,18 +375,33 @@ router.get('/register-data', async (req, res) => {
       };
     });
 
-    res.json({
-      success: true,
-      data: formattedData
-    });
+    // Ensure response is sent only once
+    if (!res.headersSent) {
+      res.json({
+        success: true,
+        data: formattedData
+      });
+    }
   } catch (error) {
-    console.error('Get register data error:', error);
+    // Clear timeout on error
+    if (timeout) clearTimeout(timeout);
+    
+    console.error('Get register data error:', error.message);
     console.error('Error stack:', error.stack);
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    
+    // Ensure response is sent only once
+    if (!res.headersSent) {
+      const statusCode = error.message === 'Database query timeout' ? 504 : 500;
+      const message = error.message === 'Database query timeout' 
+        ? 'Request timeout. Database may be slow or unavailable. Please try again.'
+        : 'Server error';
+      
+      res.status(statusCode).json({
+        success: false,
+        message: message,
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
   }
 });
 
