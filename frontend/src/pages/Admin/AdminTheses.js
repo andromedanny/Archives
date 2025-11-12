@@ -391,21 +391,38 @@ const AdminTheses = () => {
                             {thesis.title}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600 border-b">
-                            {(() => {
-                              if (Array.isArray(thesis.authors) && thesis.authors.length > 0) {
-                                // Format as "Surname (et al)" if multiple authors
-                                if (thesis.authors.length === 1) {
-                                  const author = thesis.authors[0];
-                                  return `${author.lastName || ''}${author.lastName && author.firstName ? ', ' : ''}${author.firstName || ''}`.trim();
-                                } else {
-                                  // Get first author's surname
-                                  const firstAuthor = thesis.authors[0];
-                                  const surname = firstAuthor.lastName || firstAuthor.firstName || '';
-                                  return `${surname} (et al.)`;
+                            <div className="group relative">
+                              {(() => {
+                                if (Array.isArray(thesis.authors) && thesis.authors.length > 0) {
+                                  // Format as "Surname (et al)" if multiple authors
+                                  if (thesis.authors.length === 1) {
+                                    const author = thesis.authors[0];
+                                    return `${author.lastName || ''}${author.lastName && author.firstName ? ', ' : ''}${author.firstName || ''}`.trim();
+                                  } else {
+                                    // Get first author's surname
+                                    const firstAuthor = thesis.authors[0];
+                                    const surname = firstAuthor.lastName || firstAuthor.firstName || '';
+                                    return (
+                                      <>
+                                        <span className="cursor-help">{surname} (et al.)</span>
+                                        {/* Tooltip showing all authors */}
+                                        <div className="absolute left-0 top-full mt-2 hidden group-hover:block z-50 bg-gray-800 text-white text-xs rounded-lg shadow-lg p-3 min-w-[200px]">
+                                          <div className="font-semibold mb-2">All Authors:</div>
+                                          <div className="space-y-1">
+                                            {thesis.authors.map((author, idx) => (
+                                              <div key={idx}>
+                                                {author.lastName || ''}{author.lastName && author.firstName ? ', ' : ''}{author.firstName || ''}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </>
+                                    );
+                                  }
                                 }
-                              }
-                              return thesis.authors || 'N/A';
-                            })()}
+                                return thesis.authors || 'N/A';
+                              })()}
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600 border-b">{formatCourseCode(thesis.course || thesis.program)}</td>
                           <td className="px-4 py-3 text-sm text-gray-600 border-b">{formatAcademicYear(thesis.year || thesis.academic_year)}</td>
