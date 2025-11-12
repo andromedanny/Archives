@@ -114,11 +114,35 @@ const ThesisDetail = () => {
   };
 
   const handleViewThesis = () => {
-    if (!pdfUrl) {
-      toast.error('PDF URL is not available. Please check if the backend is running.');
-      return;
+    try {
+      // Construct URL if not already set
+      let urlToOpen = pdfUrl;
+      if (!urlToOpen && thesis?.main_document?.path) {
+        if (thesisAPI.getDocumentUrl) {
+          urlToOpen = thesisAPI.getDocumentUrl(id);
+        } else {
+          const baseURL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) 
+            ? import.meta.env.VITE_API_URL 
+            : '/api';
+          urlToOpen = `${baseURL}/thesis/${id}/view`;
+        }
+        // Add token if available
+        const token = localStorage.getItem('token');
+        if (token) {
+          urlToOpen = `${urlToOpen}?token=${token}`;
+        }
+      }
+      
+      if (!urlToOpen) {
+        toast.error('PDF URL is not available. Please check if the thesis has a document uploaded.');
+        return;
+      }
+      
+      window.open(urlToOpen, '_blank');
+    } catch (error) {
+      console.error('Error opening PDF:', error);
+      toast.error('Failed to open PDF. Please try again.');
     }
-    window.open(pdfUrl, '_blank');
   };
 
   const handleBack = () => {
@@ -191,7 +215,7 @@ const ThesisDetail = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="bg-white p-8 rounded-lg shadow-lg"
+            className="bg-white/95 backdrop-blur-sm p-8 rounded-lg shadow-lg"
           >
             {/* Back Button */}
             <button
@@ -225,27 +249,26 @@ const ThesisDetail = () => {
             </div>
 
             {/* PDF Action Buttons */}
-            {pdfUrl && (
+            {thesis?.main_document?.path ? (
               <div className="mb-8">
                 <div className="flex gap-4">
                   <button
                     onClick={handleViewThesis}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    type="button"
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
                   >
                     View Thesis
                   </button>
                   <button
                     onClick={handleDownload}
-                    className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    type="button"
+                    className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors cursor-pointer"
                   >
                     Download PDF
                   </button>
                 </div>
               </div>
-            )}
-            
-            {/* Show message if PDF is not available */}
-            {!pdfUrl && thesis && (
+            ) : (
               <div className="mb-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <p className="text-yellow-800">
                   <strong>Note:</strong> This thesis does not have a PDF document uploaded yet.
