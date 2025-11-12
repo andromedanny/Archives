@@ -2,6 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
+import {
+  ArrowLeftIcon,
+  EyeIcon,
+  ArrowDownTrayIcon,
+  DocumentTextIcon,
+  CalendarIcon,
+  UserIcon,
+  AcademicCapIcon,
+  TagIcon,
+  PrinterIcon
+} from '@heroicons/react/24/outline';
 import Header from '../../components/Layout/Header';
 import Footer from '../../components/Layout/Footer';
 import BackgroundImage from '../../components/UI/BackgroundImage';
@@ -196,48 +207,80 @@ const ThesisDetail = () => {
             {/* Back Button */}
             <button
               onClick={handleBack}
-              className="mb-6 text-blue-600 hover:text-blue-700 flex items-center gap-2"
+              className="mb-6 text-blue-600 hover:text-blue-700 flex items-center gap-2 transition-colors font-medium"
             >
-              ← Back to Thesis List
+              <ArrowLeftIcon className="h-5 w-5" />
+              Back to Thesis List
             </button>
 
             {/* Thesis Header */}
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-800 mb-4">{thesis?.title}</h1>
-              <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-4">
-                <span><strong>Authors:</strong> {authorsText}</span>
-                {thesis.program && <span><strong>Program:</strong> {thesis.program}</span>}
-                {thesis.academic_year && <span><strong>Academic Year:</strong> {thesis.academic_year}</span>}
-                <span><strong>Status:</strong> 
-                  <span className={`ml-2 px-2 py-1 rounded ${
-                    thesis.status === 'Published' || thesis.status === 'published'
-                      ? 'bg-green-100 text-green-800' 
-                      : thesis.status === 'Under Review' || thesis.status === 'under_review'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : thesis.status === 'Draft' || thesis.status === 'draft'
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {typeof thesis.status === 'string' ? thesis.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) : thesis.status}
-                  </span>
+            <div className="mb-8 pb-6 border-b border-gray-200">
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6 leading-tight">{thesis?.title}</h1>
+              
+              {/* Thesis Meta Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <UserIcon className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Authors</p>
+                    <p className="text-sm text-gray-700 mt-1">{authorsText}</p>
+                  </div>
+                </div>
+                
+                {thesis.program && (
+                  <div className="flex items-start gap-3">
+                    <AcademicCapIcon className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Program</p>
+                      <p className="text-sm text-gray-700 mt-1">{thesis.program}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {thesis.academic_year && (
+                  <div className="flex items-start gap-3">
+                    <CalendarIcon className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Academic Year</p>
+                      <p className="text-sm text-gray-700 mt-1">{thesis.academic_year}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Status Badge */}
+              <div className="flex items-center gap-3 mt-4">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status:</span>
+                <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${
+                  thesis.status === 'Published' || thesis.status === 'published'
+                    ? 'bg-green-100 text-green-800' 
+                    : thesis.status === 'Under Review' || thesis.status === 'under_review'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : thesis.status === 'Draft' || thesis.status === 'draft'
+                    ? 'bg-blue-100 text-blue-800'
+                    : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {typeof thesis.status === 'string' ? thesis.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) : thesis.status}
                 </span>
               </div>
             </div>
 
             {/* PDF Action Buttons */}
             {pdfUrl && (
-              <div className="mb-8">
-                <div className="flex gap-4">
+              <div className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <button
                     onClick={handleViewThesis}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg font-medium"
                   >
+                    <EyeIcon className="h-5 w-5" />
                     View Thesis
                   </button>
                   <button
                     onClick={handleDownload}
-                    className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-md hover:shadow-lg font-medium"
                   >
+                    <ArrowDownTrayIcon className="h-5 w-5" />
                     Download PDF
                   </button>
                 </div>
@@ -246,28 +289,44 @@ const ThesisDetail = () => {
             
             {/* Show message if PDF is not available */}
             {!pdfUrl && thesis && (
-              <div className="mb-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-yellow-800">
-                  <strong>Note:</strong> This thesis does not have a PDF document uploaded yet.
-                </p>
+              <div className="mb-8 p-5 bg-amber-50 border-l-4 border-amber-400 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <DocumentTextIcon className="h-6 w-6 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-amber-800 font-medium">
+                      PDF Document Not Available
+                    </p>
+                    <p className="text-amber-700 text-sm mt-1">
+                      This thesis does not have a PDF document uploaded yet.
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
 
             {/* Thesis Content */}
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-800 mb-3">Abstract</h2>
-                <p className="text-gray-700 leading-relaxed">{thesis?.abstract || 'No abstract available'}</p>
+            <div className="space-y-8">
+              {/* Abstract Section */}
+              <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <DocumentTextIcon className="h-6 w-6 text-blue-600" />
+                  Abstract
+                </h2>
+                <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{thesis?.abstract || 'No abstract available'}</p>
               </div>
 
+              {/* Keywords Section */}
               {thesis.keywords && thesis.keywords.length > 0 && (
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-800 mb-3">Keywords</h2>
+                <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <TagIcon className="h-6 w-6 text-blue-600" />
+                    Keywords
+                  </h2>
                   <div className="flex flex-wrap gap-2">
                     {thesis.keywords.map((keyword, index) => (
                       <span
                         key={index}
-                        className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                        className="px-4 py-2 bg-blue-100 text-blue-800 rounded-full text-sm font-medium hover:bg-blue-200 transition-colors"
                       >
                         {keyword}
                       </span>
@@ -276,42 +335,60 @@ const ThesisDetail = () => {
                 </div>
               )}
 
-              {thesis.adviser && (
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-800 mb-3">Adviser</h2>
-                  <p className="text-gray-700">
-                    {thesis.adviser.firstName} {thesis.adviser.lastName}
+              {/* Adviser Section */}
+              {(thesis.adviser || thesis.adviser_name) && (
+                <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <UserIcon className="h-6 w-6 text-blue-600" />
+                    Adviser
+                  </h2>
+                  <p className="text-gray-700 text-lg">
+                    {thesis.adviser 
+                      ? `${thesis.adviser.firstName} ${thesis.adviser.lastName}` 
+                      : thesis.adviser_name}
                   </p>
                 </div>
               )}
 
-              {thesis.adviser_name && (
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-800 mb-3">Adviser</h2>
-                  <p className="text-gray-700">{thesis.adviser_name}</p>
+              {/* Submission Details Section */}
+              <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <CalendarIcon className="h-6 w-6 text-blue-600" />
+                  Submission Details
+                </h2>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-gray-600 min-w-[120px]">Submitted on:</span>
+                    <span className="text-gray-700">{formatDate(thesis.createdAt || thesis.submitted_at)}</span>
+                  </div>
+                  {thesis.view_count !== undefined && (
+                    <div className="flex items-center gap-4 pt-3 border-t border-gray-200">
+                      <div className="flex items-center gap-2">
+                        <EyeIcon className="h-5 w-5 text-gray-400" />
+                        <span className="text-sm text-gray-600">
+                          <span className="font-semibold text-gray-900">{thesis.view_count || 0}</span> views
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <ArrowDownTrayIcon className="h-5 w-5 text-gray-400" />
+                        <span className="text-sm text-gray-600">
+                          <span className="font-semibold text-gray-900">{thesis.download_count || 0}</span> downloads
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-
-              <div>
-                <h2 className="text-xl font-semibold text-gray-800 mb-3">Submission Details</h2>
-                <p className="text-gray-700">
-                  Submitted on: {formatDate(thesis.createdAt || thesis.submitted_at)}
-                </p>
-                {thesis.view_count !== undefined && (
-                  <p className="text-gray-700 mt-1">
-                    Views: {thesis.view_count || 0} | Downloads: {thesis.download_count || 0}
-                  </p>
-                )}
               </div>
             </div>
 
             {/* Action Buttons - Show if no PDF URL */}
             {!pdfUrl && (
-              <div className="mt-8 flex gap-4">
+              <div className="mt-8 pt-6 border-t border-gray-200">
                 <button
                   onClick={() => window.print()}
-                  className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors shadow-md hover:shadow-lg font-medium"
                 >
+                  <PrinterIcon className="h-5 w-5" />
                   Print
                 </button>
               </div>
