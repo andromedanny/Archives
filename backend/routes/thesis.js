@@ -39,7 +39,22 @@ router.get('/', [
     const offset = (page - 1) * limit;
 
     // Build where clause (using snake_case to match database columns)
-    const where = { is_public: true, status: 'Published' };
+    // Show published public theses, OR theses from the logged-in user's department
+    let where;
+    if (req.user && req.user.department) {
+      // If user is logged in and has a department, show:
+      // 1. All published public theses (from any department)
+      // 2. All theses from user's department (regardless of status or is_public)
+      where = {
+        [Op.or]: [
+          { is_public: true, status: 'Published' },
+          { department: req.user.department }
+        ]
+      };
+    } else {
+      // If not logged in, only show published public theses
+      where = { is_public: true, status: 'Published' };
+    }
 
     // Search functionality (Objective 5.3: Advanced search)
     if (req.query.search) {
