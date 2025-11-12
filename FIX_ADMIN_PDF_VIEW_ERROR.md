@@ -38,28 +38,80 @@ This is the permanent solution that will prevent files from being lost in the fu
 1. Go to **Storage** → **Policies** for the `thesis-documents` bucket
 2. Click **New Policy**
 3. Select **For full customization** (or use the template)
-4. Add these policies:
+4. Add these policies one by one:
 
-**Policy 1: Allow public read access**
-- Policy name: `Public Read Access`
-- Allowed operation: `SELECT`
-- Target roles: `public`, `anon`
-- USING expression: `true`
-- WITH CHECK expression: `true`
+**Policy 1: Allow public read access (download/view files)**
+1. Click **New Policy**
+2. Fill in the form:
+   - **Policy name:** `Public Read Access`
+   - **Allowed operation:** Check `SELECT` and `download` and `getPublicUrl`
+   - **Target roles:** Check `anon` and `public` (or leave all checked for public access)
+   - **Policy definition (USING expression):** 
+     ```sql
+     true
+     ```
+   - **WITH CHECK expression (if required):** 
+     ```sql
+     true
+     ```
+3. Click **Review** to verify
+4. Click **Save policy**
 
-**Policy 2: Allow authenticated users to upload**
-- Policy name: `Authenticated Upload`
-- Allowed operation: `INSERT`
-- Target roles: `authenticated`
-- USING expression: `true`
-- WITH CHECK expression: `true`
+**Policy 2: Allow authenticated users to upload files**
+1. Click **New Policy** again
+2. Fill in the form:
+   - **Policy name:** `Authenticated Upload`
+   - **Allowed operation:** Check `INSERT` and `upload`
+   - **Target roles:** Check `authenticated` (uncheck `anon` and `public`)
+   - **Policy definition (USING expression):** 
+     ```sql
+     true
+     ```
+   - **WITH CHECK expression (if required):** 
+     ```sql
+     true
+     ```
+3. Click **Review** to verify
+4. Click **Save policy**
 
-**Policy 3: Allow authenticated users to update**
-- Policy name: `Authenticated Update`
-- Allowed operation: `UPDATE`
-- Target roles: `authenticated`
-- USING expression: `true`
-- WITH CHECK expression: `true`
+**Policy 3: Allow authenticated users to update/delete files (optional)**
+1. Click **New Policy** again
+2. Fill in the form:
+   - **Policy name:** `Authenticated Update Delete`
+   - **Allowed operation:** Check `UPDATE`, `DELETE`, `update`, `remove`
+   - **Target roles:** Check `authenticated` (uncheck `anon` and `public`)
+   - **Policy definition (USING expression):** 
+     ```sql
+     true
+     ```
+   - **WITH CHECK expression (if required):** 
+     ```sql
+     true
+     ```
+3. Click **Review** to verify
+4. Click **Save policy**
+
+**Policy 4: Allow authenticated users to list files (optional)**
+1. Click **New Policy** again
+2. Fill in the form:
+   - **Policy name:** `Authenticated List`
+   - **Allowed operation:** Check `list`
+   - **Target roles:** Check `authenticated` (uncheck `anon` and `public`)
+   - **Policy definition (USING expression):** 
+     ```sql
+     true
+     ```
+   - **WITH CHECK expression (if required):** 
+     ```sql
+     true
+     ```
+3. Click **Review** to verify
+4. Click **Save policy**
+
+**Quick Setup (Minimum Required Policies):**
+If you want the simplest setup, you only need **Policy 1** and **Policy 2**:
+- Policy 1: Public read access (for viewing/downloading files)
+- Policy 2: Authenticated upload (for uploading files)
 
 #### Step 4: Configure Render Environment Variables
 1. Go to your Render dashboard: https://dashboard.render.com
