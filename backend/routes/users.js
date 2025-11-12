@@ -196,6 +196,7 @@ router.post('/', protect, authorize('admin'), [
 router.put('/:id', protect, [
   body('firstName').optional().trim().notEmpty().withMessage('First name cannot be empty'),
   body('lastName').optional().trim().notEmpty().withMessage('Last name cannot be empty'),
+  body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('phone').optional().matches(/^[\+]?[1-9][\d]{0,15}$/).withMessage('Invalid phone number'),
   body('role').optional().isIn(['student', 'faculty', 'admin', 'adviser', 'prof']),
   body('isActive').optional().isBoolean()
@@ -234,6 +235,14 @@ router.put('/:id', protect, [
     if (req.body.phone) updateData.phone = req.body.phone;
     if (req.body.department) updateData.department = req.body.department;
     if (req.body.studentId) updateData.studentId = req.body.studentId;
+    
+    // Password update - only update if provided (for admin password reset)
+    if (req.body.password && req.body.password.trim() !== '') {
+      // Only admin can update passwords (for password reset functionality)
+      if (req.user.role === 'admin') {
+        updateData.password = req.body.password;
+      }
+    }
 
     if (req.user.role === 'admin') {
       if (req.body.role) updateData.role = req.body.role;

@@ -28,12 +28,14 @@ const AdminUsers = () => {
     firstName: '',
     lastName: '',
     email: '',
+    password: '',
     role: 'student',
     department: '',
     studentId: '',
     phone: '',
     isActive: true
   });
+  const [showPassword, setShowPassword] = useState(false);
 
   // Check URL parameter to open add modal
   useEffect(() => {
@@ -87,12 +89,14 @@ const AdminUsers = () => {
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
+      password: '', // Don't populate password when editing
       role: user.role,
       department: user.department,
       studentId: user.studentId || '',
       phone: user.phone || '',
       isActive: user.isActive
     });
+    setShowPassword(false);
     setShowEditModal(true);
   };
 
@@ -102,25 +106,47 @@ const AdminUsers = () => {
       firstName: '',
       lastName: '',
       email: '',
+      password: '',
       role: 'student',
       department: '',
       studentId: '',
       phone: '',
       isActive: true
     });
+    setShowPassword(false);
     setShowAddModal(true);
   };
 
   const handleSave = async () => {
     try {
       if (editingUser) {
-        // Update existing user
-        await usersAPI.updateUser(editingUser.id, formData);
+        // Update existing user - only include password if provided
+        const updateData = { ...formData };
+        if (updateData.password && updateData.password.trim() !== '') {
+          // If password is provided, validate it
+          if (updateData.password.length < 6) {
+            toast.error('Password must be at least 6 characters');
+            return;
+          }
+          // Password will be included in updateData
+        } else {
+          // Remove password from updateData if empty
+          delete updateData.password;
+        }
+        await usersAPI.updateUser(editingUser.id, updateData);
         toast.success('User updated successfully');
         setShowEditModal(false);
         fetchUsers();
       } else {
-        // Add new user
+        // Add new user - password is required
+        if (!formData.password || formData.password.trim() === '') {
+          toast.error('Password is required');
+          return;
+        }
+        if (formData.password.length < 6) {
+          toast.error('Password must be at least 6 characters');
+          return;
+        }
         await usersAPI.createUser(formData);
         toast.success('User created successfully');
         setShowAddModal(false);
@@ -130,12 +156,14 @@ const AdminUsers = () => {
         firstName: '',
         lastName: '',
         email: '',
+        password: '',
         role: 'student',
         department: '',
         studentId: '',
         phone: '',
         isActive: true
       });
+      setShowPassword(false);
       setEditingUser(null);
     } catch (error) {
       console.error('Error saving user:', error);
@@ -467,6 +495,58 @@ const AdminUsers = () => {
                   />
                 </div>
 
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                    Password *
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      required
+                      minLength={6}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        paddingRight: '40px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                      placeholder="Enter password (min. 6 characters)"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? (
+                        <EyeSlashIcon style={{ width: '20px', height: '20px', color: '#6b7280' }} />
+                      ) : (
+                        <EyeIcon style={{ width: '20px', height: '20px', color: '#6b7280' }} />
+                      )}
+                    </button>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                    Password must be at least 6 characters long
+                  </p>
+                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
@@ -726,6 +806,65 @@ const AdminUsers = () => {
                       fontSize: '14px'
                     }}
                   />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                    Password {editingUser ? '(Leave blank to keep current password)' : '*'}
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      required={!editingUser}
+                      minLength={editingUser ? 0 : 6}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        paddingRight: '40px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                      placeholder={editingUser ? 'Leave blank to keep current password' : 'Enter password (min. 6 characters)'}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? (
+                        <EyeSlashIcon style={{ width: '20px', height: '20px', color: '#6b7280' }} />
+                      ) : (
+                        <EyeIcon style={{ width: '20px', height: '20px', color: '#6b7280' }} />
+                      )}
+                    </button>
+                  </div>
+                  {!editingUser && (
+                    <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                      Password must be at least 6 characters long
+                    </p>
+                  )}
+                  {editingUser && (
+                    <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                      Leave blank to keep current password, or enter new password (min. 6 characters)
+                    </p>
+                  )}
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>

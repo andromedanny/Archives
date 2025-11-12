@@ -13,7 +13,8 @@ import {
   EyeIcon,
   ArrowDownTrayIcon,
   CheckIcon,
-  XMarkIcon
+  XMarkIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
 
 const AdminTheses = () => {
@@ -269,6 +270,41 @@ const AdminTheses = () => {
     }
   };
 
+  const handleViewPDF = (thesisId) => {
+    try {
+      // Get the PDF view URL
+      const baseURL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) 
+        ? import.meta.env.VITE_API_URL 
+        : '/api';
+      const token = localStorage.getItem('token');
+      const pdfUrl = token 
+        ? `${baseURL}/thesis/${thesisId}/view?token=${token}` 
+        : `${baseURL}/thesis/${thesisId}/view`;
+      
+      // Open PDF in new tab
+      window.open(pdfUrl, '_blank');
+    } catch (error) {
+      console.error('Error opening PDF:', error);
+      toast.error('Failed to open PDF. Please try again.');
+    }
+  };
+
+  const getCreatorName = (thesis) => {
+    if (Array.isArray(thesis.authors) && thesis.authors.length > 0) {
+      const creator = thesis.authors[0]; // First author is typically the creator
+      const lastName = creator.lastName || '';
+      const firstName = creator.firstName || '';
+      if (lastName && firstName) {
+        return `${lastName}, ${firstName}`;
+      } else if (lastName) {
+        return lastName;
+      } else if (firstName) {
+        return firstName;
+      }
+    }
+    return 'Unknown';
+  };
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
@@ -366,6 +402,7 @@ const AdminTheses = () => {
                   <thead>
                     <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Title</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Creator</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Authors</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Course</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Year</th>
@@ -388,7 +425,31 @@ const AdminTheses = () => {
                           className="hover:bg-gray-50 transition-colors"
                         >
                           <td className="px-4 py-3 text-sm text-gray-900 border-b font-medium">
-                            {thesis.title}
+                            {thesis.main_document?.path ? (
+                              <button
+                                onClick={() => handleViewPDF(thesis.id)}
+                                className="flex items-center gap-2 text-blue-600 hover:text-blue-800 hover:underline transition-colors cursor-pointer"
+                                title="Click to view PDF"
+                              >
+                                <DocumentTextIcon className="h-4 w-4" />
+                                <span>{thesis.title}</span>
+                              </button>
+                            ) : (
+                              <span className="text-gray-500">{thesis.title}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600 border-b">
+                            {thesis.main_document?.path ? (
+                              <button
+                                onClick={() => handleViewPDF(thesis.id)}
+                                className="text-blue-600 hover:text-blue-800 hover:underline transition-colors cursor-pointer"
+                                title="Click to view PDF"
+                              >
+                                {getCreatorName(thesis)}
+                              </button>
+                            ) : (
+                              <span className="text-gray-500">{getCreatorName(thesis)}</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600 border-b">
                             <div className="group relative">
