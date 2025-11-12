@@ -517,19 +517,42 @@ router.post('/:id/document', protect, uploadThesisDocument, handleUploadError, a
       });
     }
 
-    // Get file info (includes checksum for integrity verification - Objective 1.4)
-    const fileInfo = getFileInfo(req.file);
+    // Check if using cloud storage (Supabase Storage)
+    const storageType = process.env.STORAGE_TYPE || 'local';
+    let fileInfo;
+    
+    if (storageType === 'supabase') {
+      // Upload to Supabase Storage
+      const { uploadFile: uploadToCloud } = require('../config/cloudStorage');
+      try {
+        fileInfo = await uploadToCloud(req.file, 'thesis/documents');
+        // fileInfo.url contains the public URL
+        // fileInfo.path contains the storage path
+        // Store the URL in the database for Supabase
+      } catch (error) {
+        console.error('Supabase upload error:', error);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload file to cloud storage. Please try again.',
+          error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      }
+    } else {
+      // Local storage - get file info (includes checksum for integrity verification - Objective 1.4)
+      fileInfo = getFileInfo(req.file);
+    }
 
     // Update thesis with document info (using snake_case)
-    // Includes checksum for file integrity verification
+    // For Supabase: store the URL in path field
+    // For local: store the file path
     await thesis.update({
       main_document: {
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        path: req.file.path,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
-        checksum: fileInfo.checksum, // SHA256 checksum for integrity verification
+        filename: fileInfo.filename || req.file.filename,
+        originalName: fileInfo.originalName || req.file.originalname,
+        path: fileInfo.url || fileInfo.path || req.file.path, // URL for Supabase, path for local
+        size: fileInfo.size || req.file.size,
+        mimetype: fileInfo.mimetype || req.file.mimetype,
+        checksum: fileInfo.checksum, // SHA256 checksum for integrity verification (local only)
         uploadedAt: new Date()
       }
     });
