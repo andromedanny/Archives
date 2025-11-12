@@ -28,7 +28,7 @@ Public Read Access
 
 **Target roles:**
 - ☑ anon
-- ☑ public
+- (Note: If `public` option is not visible, that's fine - `anon` covers public access. Or leave empty if caption says it defaults to public)
 
 **Policy definition (USING expression):**
 ```sql
@@ -145,7 +145,7 @@ true
 
 After creating all 4 policies, verify:
 
-- [ ] Policy 1: Public Read Access - `SELECT`, `download`, `getPublicUrl` - `anon`, `public` - Active
+- [ ] Policy 1: Public Read Access - `SELECT`, `download`, `getPublicUrl` - `anon` (or empty for default public) - Active
 - [ ] Policy 2: Authenticated Upload - `INSERT`, `upload` - `authenticated` - Active
 - [ ] Policy 3: Authenticated Update Delete - `UPDATE`, `DELETE`, `update`, `remove` - `authenticated` - Active
 - [ ] Policy 4: Authenticated List - `list` - `authenticated` - Active
@@ -170,7 +170,7 @@ Supabase Dashboard
 
 | Policy | Operations | Roles | SQL |
 |--------|-----------|-------|-----|
-| 1. Public Read Access | SELECT, download, getPublicUrl | anon, public | `true` |
+| 1. Public Read Access | SELECT, download, getPublicUrl | anon (or leave empty for default public) | `true` |
 | 2. Authenticated Upload | INSERT, upload | authenticated | `true` |
 | 3. Authenticated Update Delete | UPDATE, DELETE, update, remove | authenticated | `true` |
 | 4. Authenticated List | list | authenticated | `true` |
