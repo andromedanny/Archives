@@ -276,7 +276,7 @@ const Dashboard = () => {
     }
   };
 
-  // Search theses function for students - filter by same department and course
+  // Search theses function for students - filter by same department
   const handleSearch = async (e) => {
     e.preventDefault();
     if (!searchTerm.trim()) {
@@ -288,13 +288,10 @@ const Dashboard = () => {
       setIsSearching(true);
       setShowSearchResults(true);
       
-      // Build filters based on user's department and course
+      // Build filters based on user's department only
       const filters = {};
       if (currentUser?.department) {
         filters.department = currentUser.department;
-      }
-      if (currentUser?.course) {
-        filters.program = currentUser.course; // Backend uses 'program' parameter
       }
       
       const response = await thesisAPI.searchTheses(searchTerm.trim(), filters);
@@ -450,7 +447,7 @@ const Dashboard = () => {
                 <form onSubmit={handleSearch} className="relative">
                   <input
                     type="text"
-                    placeholder={`Search theses by title, author, or keywords${currentUser?.department ? ` (${currentUser.department}${currentUser?.course ? ` - ${currentUser.course}` : ''})` : ''}...`}
+                    placeholder={`Search theses by title, author, or keywords${currentUser?.department ? ` (${currentUser.department})` : ''}...`}
                     value={searchTerm}
                     onChange={(e) => {
                       setSearchTerm(e.target.value);
