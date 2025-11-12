@@ -14,7 +14,6 @@ const ThesisDetail = () => {
   const [thesis, setThesis] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [pdfUrl, setPdfUrl] = useState(null);
-  const [showPdf, setShowPdf] = useState(false);
 
   useEffect(() => {
     const fetchThesis = async () => {
@@ -114,15 +113,7 @@ const ThesisDetail = () => {
     }
   };
 
-  const handleViewPdf = () => {
-    if (!pdfUrl) {
-      toast.error('PDF URL is not available. Please check if the backend is running.');
-      return;
-    }
-    setShowPdf(true);
-  };
-
-  const handleOpenPdfInNewTab = () => {
+  const handleViewThesis = () => {
     if (!pdfUrl) {
       toast.error('PDF URL is not available. Please check if the backend is running.');
       return;
@@ -233,21 +224,15 @@ const ThesisDetail = () => {
               </div>
             </div>
 
-            {/* PDF Viewer Section */}
+            {/* PDF Action Buttons */}
             {pdfUrl && (
               <div className="mb-8">
-                <div className="flex gap-4 mb-4">
+                <div className="flex gap-4">
                   <button
-                    onClick={handleViewPdf}
+                    onClick={handleViewThesis}
                     className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
-                    View PDF (Inline)
-                  </button>
-                  <button
-                    onClick={handleOpenPdfInNewTab}
-                    className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                  >
-                    Open PDF in New Tab
+                    View Thesis
                   </button>
                   <button
                     onClick={handleDownload}
@@ -256,41 +241,6 @@ const ThesisDetail = () => {
                     Download PDF
                   </button>
                 </div>
-                
-                {showPdf && pdfUrl && (
-                  <div className="border border-gray-300 rounded-lg overflow-hidden" style={{ height: '800px' }}>
-                    <div className="bg-gray-100 p-2 flex justify-between items-center border-b">
-                      <span className="text-sm text-gray-600">PDF Viewer</span>
-                      <button
-                        onClick={() => setShowPdf(false)}
-                        className="text-gray-600 hover:text-gray-800 text-sm px-3 py-1 rounded hover:bg-gray-200"
-                      >
-                        Close
-                      </button>
-                    </div>
-                    <iframe
-                      src={pdfUrl}
-                      className="w-full"
-                      style={{ height: 'calc(800px - 40px)' }}
-                      title="PDF Viewer"
-                      onError={() => {
-                        toast.error('Failed to load PDF in iframe. Try opening in a new tab or downloading.');
-                        setShowPdf(false);
-                      }}
-                    />
-                  </div>
-                )}
-                {showPdf && !pdfUrl && (
-                  <div className="border border-gray-300 rounded-lg p-8 text-center">
-                    <p className="text-gray-600 mb-4">PDF not available for viewing.</p>
-                    <button
-                      onClick={handleDownload}
-                      className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                    >
-                      Download PDF Instead
-                    </button>
-                  </div>
-                )}
               </div>
             )}
             
