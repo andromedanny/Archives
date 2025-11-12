@@ -153,9 +153,260 @@ router.get('/', [
   }
 });
 
+// @desc    Get user's theses
+// @route   GET /api/thesis/user/my-theses
+// @access  Private
+// NOTE: This route MUST come before /:id to avoid route conflicts
+router.get('/user/my-theses', protect, async (req, res) => {
+  try {
+    const { Op } = require('sequelize');
+    const { ThesisAuthors } = require('../models');
+    
+    // Get all thesis IDs where the user is an author
+    const authorTheses = await ThesisAuthors.findAll({
+      where: { user_id: req.user.id },
+      attributes: ['thesis_id', 'user_id']
+    });
+    
+    const thesisIds = authorTheses.map(at => at.thesis_id);
+    
+    if (thesisIds.length === 0) {
+      return res.json({
+        success: true,
+        count: 0,
+        data: []
+      });
+    }
+    
+    const theses = await Thesis.findAll({
+      where: {
+        id: {
+          [Op.in]: thesisIds
+        }
+      },
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id', 'firstName', 'lastName'],
+          through: { attributes: [] }
+        },
+        {
+          model: User,
+          as: 'adviser',
+          attributes: ['id', 'firstName', 'lastName'],
+          required: false
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.json({
+      success: true,
+      count: theses.length,
+      data: theses
+    });
+  } catch (error) {
+    console.error('Get user theses error:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// @desc    View thesis document (for inline viewing in browser)
+// @route   GET /api/thesis/:id/view
+// @access  Private (Public theses can be viewed by anyone, private only by authors/admin)
+// NOTE: This route MUST come before /:id to avoid route conflicts
+router.get('/:id/view', optionalAuth, async (req, res) => {
+  try {
+    const thesis = await Thesis.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id'],
+          through: { attributes: [] }
+        }
+      ]
+    });
+
+    if (!thesis) {
+      return res.status(404).json({
+        success: false,
+        message: 'Thesis not found'
+      });
+    }
+
+    // Check if user can view this thesis
+    // Public theses with Published status can be viewed by anyone
+    // Private theses or non-published theses require authentication
+    if (!thesis.is_public || thesis.status !== 'Published') {
+      if (!req.user || (req.user.role !== 'admin')) {
+        // Check if user is author
+        const authorIds = thesis.authors.map(a => a.id);
+        if (!authorIds.includes(req.user?.id)) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied. This thesis is not publicly available.'
+          });
+        }
+      }
+    }
+
+    // Check if document exists
+    if (!thesis.main_document || !thesis.main_document.path) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    const filePath = thesis.main_document.path;
+
+    // Verify file exists
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found on server'
+      });
+    }
+
+    // Set headers for inline viewing (not download)
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${thesis.main_document.originalName || `thesis-${thesis.id}.pdf`}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    
+    // Send file for inline viewing
+    res.sendFile(path.resolve(filePath), (err) => {
+      if (err) {
+        console.error('Error sending file:', err);
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            message: 'Error viewing file'
+          });
+        }
+      }
+    });
+  } catch (error) {
+    console.error('View thesis error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Server error'
+      });
+    }
+  }
+});
+
+// @desc    Download thesis document with integrity verification
+// @route   GET /api/thesis/:id/download
+// @access  Private (Public theses can be downloaded by anyone, private only by authors/admin)
+// NOTE: This route MUST come before /:id to avoid route conflicts
+router.get('/:id/download', optionalAuth, async (req, res) => {
+  try {
+    const thesis = await Thesis.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id'],
+          through: { attributes: [] }
+        }
+      ]
+    });
+
+    if (!thesis) {
+      return res.status(404).json({
+        success: false,
+        message: 'Thesis not found'
+      });
+    }
+
+    // Check if user can download this thesis
+    // Public theses with Published status can be downloaded by anyone
+    // Private theses or non-published theses require authentication
+    if (!thesis.is_public || thesis.status !== 'Published') {
+      if (!req.user || (req.user.role !== 'admin')) {
+        // Check if user is author
+        const authorIds = thesis.authors.map(a => a.id);
+        if (!authorIds.includes(req.user?.id)) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied. This thesis is not publicly available.'
+          });
+        }
+      }
+    }
+
+    // Check if document exists
+    if (!thesis.main_document || !thesis.main_document.path) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    const filePath = thesis.main_document.path;
+
+    // Verify file exists
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found on server'
+      });
+    }
+
+    // Verify file integrity (Objective 1.4: Prevent data corruption)
+    if (thesis.main_document.checksum) {
+      const isIntegrityValid = verifyFileIntegrity(filePath, thesis.main_document.checksum);
+      if (!isIntegrityValid) {
+        console.error(`File integrity check failed for thesis ${thesis.id}`);
+        return res.status(500).json({
+          success: false,
+          message: 'File integrity verification failed. The file may be corrupted. Please contact the administrator.'
+        });
+      }
+    }
+
+    // Increment download count
+    await thesis.incrementDownloadCount();
+
+    // Log file download (Objective 5.5: Audit logging)
+    await logFileOperation(req, 'thesis.download', thesis.id, 'success');
+
+    // Send file
+    const fileName = thesis.main_document.originalName || `thesis-${thesis.id}.pdf`;
+    res.download(filePath, fileName, (err) => {
+      if (err) {
+        console.error('Error downloading file:', err);
+        // Log download failure
+        logFileOperation(req, 'thesis.download', thesis.id, 'failure', err.message).catch(console.error);
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            message: 'Error downloading file'
+          });
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Download thesis error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
 // @desc    Upload thesis document
 // @route   POST /api/thesis/:id/document
 // @access  Private (Thesis authors and admin)
+// NOTE: This route MUST come before /:id to avoid route conflicts
 router.post('/:id/document', protect, uploadThesisDocument, handleUploadError, async (req, res) => {
   try {
     const thesis = await Thesis.findByPk(req.params.id, {
@@ -266,14 +517,16 @@ router.get('/:id', optionalAuth, async (req, res) => {
     }
 
     // Check if user can view this thesis
-    if (!thesis.isPublic && thesis.status !== 'Published') {
+    // Public theses with Published status can be viewed by anyone
+    // Private theses or non-published theses require authentication
+    if (!thesis.is_public || thesis.status !== 'Published') {
       if (!req.user || (req.user.role !== 'admin')) {
         // Check if user is author
         const authorIds = thesis.authors.map(a => a.id);
         if (!authorIds.includes(req.user?.id)) {
           return res.status(403).json({
             success: false,
-            message: 'Access denied'
+            message: 'Access denied. This thesis is not publicly available.'
           });
         }
       }
@@ -622,6 +875,7 @@ router.delete('/:id', protect, async (req, res) => {
 // @desc    Submit thesis for review
 // @route   PUT /api/thesis/:id/submit
 // @access  Private (Thesis authors)
+// NOTE: This route MUST come before /:id to avoid route conflicts
 router.put('/:id/submit', protect, async (req, res) => {
   try {
     const thesis = await Thesis.findByPk(req.params.id, {
@@ -678,251 +932,5 @@ router.put('/:id/submit', protect, async (req, res) => {
   }
 });
 
-// @desc    Get user's theses
-// @route   GET /api/thesis/user/my-theses
-// @access  Private
-router.get('/user/my-theses', protect, async (req, res) => {
-  try {
-    const { Op } = require('sequelize');
-    const { ThesisAuthors } = require('../models');
-    
-    // Get all thesis IDs where the user is an author
-    const authorTheses = await ThesisAuthors.findAll({
-      where: { user_id: req.user.id },
-      attributes: ['thesis_id', 'user_id']
-    });
-    
-    const thesisIds = authorTheses.map(at => at.thesis_id);
-    
-    if (thesisIds.length === 0) {
-      return res.json({
-        success: true,
-        count: 0,
-        data: []
-      });
-    }
-    
-    const theses = await Thesis.findAll({
-      where: {
-        id: {
-          [Op.in]: thesisIds
-        }
-      },
-      include: [
-        {
-          model: User,
-          as: 'authors',
-          attributes: ['id', 'firstName', 'lastName'],
-          through: { attributes: [] }
-        },
-        {
-          model: User,
-          as: 'adviser',
-          attributes: ['id', 'firstName', 'lastName'],
-          required: false
-        }
-      ],
-      order: [['createdAt', 'DESC']]
-    });
-
-    res.json({
-      success: true,
-      count: theses.length,
-      data: theses
-    });
-  } catch (error) {
-    console.error('Get user theses error:', error);
-    console.error('Error stack:', error.stack);
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// @desc    View thesis document (for inline viewing in browser)
-// @route   GET /api/thesis/:id/view
-// @access  Private (Public theses can be viewed by anyone, private only by authors/admin)
-router.get('/:id/view', optionalAuth, async (req, res) => {
-  try {
-    const thesis = await Thesis.findByPk(req.params.id, {
-      include: [
-        {
-          model: User,
-          as: 'authors',
-          attributes: ['id'],
-          through: { attributes: [] }
-        }
-      ]
-    });
-
-    if (!thesis) {
-      return res.status(404).json({
-        success: false,
-        message: 'Thesis not found'
-      });
-    }
-
-    // Check if user can view this thesis
-    // Public theses with Published status can be viewed by anyone
-    // Private theses or non-published theses require authentication
-    if (!thesis.is_public || thesis.status !== 'Published') {
-      if (!req.user || (req.user.role !== 'admin')) {
-        // Check if user is author
-        const authorIds = thesis.authors.map(a => a.id);
-        if (!authorIds.includes(req.user?.id)) {
-          return res.status(403).json({
-            success: false,
-            message: 'Access denied. This thesis is not publicly available.'
-          });
-        }
-      }
-    }
-
-    // Check if document exists
-    if (!thesis.main_document || !thesis.main_document.path) {
-      return res.status(404).json({
-        success: false,
-        message: 'Document not found'
-      });
-    }
-
-    const filePath = thesis.main_document.path;
-
-    // Verify file exists
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({
-        success: false,
-        message: 'File not found on server'
-      });
-    }
-
-    // Set headers for inline viewing (not download)
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${thesis.main_document.originalName || `thesis-${thesis.id}.pdf`}"`);
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    
-    // Send file for inline viewing
-    res.sendFile(path.resolve(filePath), (err) => {
-      if (err) {
-        console.error('Error sending file:', err);
-        if (!res.headersSent) {
-          res.status(500).json({
-            success: false,
-            message: 'Error viewing file'
-          });
-        }
-      }
-    });
-  } catch (error) {
-    console.error('View thesis error:', error);
-    if (!res.headersSent) {
-      res.status(500).json({
-        success: false,
-        message: 'Server error'
-      });
-    }
-  }
-});
-
-// @desc    Download thesis document with integrity verification
-// @route   GET /api/thesis/:id/download
-// @access  Private (Public theses can be downloaded by anyone, private only by authors/admin)
-router.get('/:id/download', optionalAuth, async (req, res) => {
-  try {
-    const thesis = await Thesis.findByPk(req.params.id, {
-      include: [
-        {
-          model: User,
-          as: 'authors',
-          attributes: ['id'],
-          through: { attributes: [] }
-        }
-      ]
-    });
-
-    if (!thesis) {
-      return res.status(404).json({
-        success: false,
-        message: 'Thesis not found'
-      });
-    }
-
-    // Check if user can download this thesis
-    // Public theses with Published status can be downloaded by anyone
-    // Private theses or non-published theses require authentication
-    if (!thesis.is_public || thesis.status !== 'Published') {
-      if (!req.user || (req.user.role !== 'admin')) {
-        // Check if user is author
-        const authorIds = thesis.authors.map(a => a.id);
-        if (!authorIds.includes(req.user?.id)) {
-          return res.status(403).json({
-            success: false,
-            message: 'Access denied. This thesis is not publicly available.'
-          });
-        }
-      }
-    }
-
-    // Check if document exists
-    if (!thesis.main_document || !thesis.main_document.path) {
-      return res.status(404).json({
-        success: false,
-        message: 'Document not found'
-      });
-    }
-
-    const filePath = thesis.main_document.path;
-
-    // Verify file exists
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({
-        success: false,
-        message: 'File not found on server'
-      });
-    }
-
-    // Verify file integrity (Objective 1.4: Prevent data corruption)
-    if (thesis.main_document.checksum) {
-      const isIntegrityValid = verifyFileIntegrity(filePath, thesis.main_document.checksum);
-      if (!isIntegrityValid) {
-        console.error(`File integrity check failed for thesis ${thesis.id}`);
-        return res.status(500).json({
-          success: false,
-          message: 'File integrity verification failed. The file may be corrupted. Please contact the administrator.'
-        });
-      }
-    }
-
-    // Increment download count
-    await thesis.incrementDownloadCount();
-
-    // Log file download (Objective 5.5: Audit logging)
-    await logFileOperation(req, 'thesis.download', thesis.id, 'success');
-
-    // Send file
-    const fileName = thesis.main_document.originalName || `thesis-${thesis.id}.pdf`;
-    res.download(filePath, fileName, (err) => {
-      if (err) {
-        console.error('Error downloading file:', err);
-        // Log download failure
-        logFileOperation(req, 'thesis.download', thesis.id, 'failure', err.message).catch(console.error);
-        if (!res.headersSent) {
-          res.status(500).json({
-            success: false,
-            message: 'Error downloading file'
-          });
-        }
-      }
-    });
-  } catch (error) {
-    console.error('Download thesis error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
 
 module.exports = router;
