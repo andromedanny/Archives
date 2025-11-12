@@ -214,6 +214,13 @@ const Dashboard = () => {
           link: '/thesis/create'
         },
         {
+          title: 'Show all available Thesis',
+          description: 'Browse all available theses',
+          icon: BookOpenIcon,
+          color: 'indigo',
+          link: '/thesis'
+        },
+        {
           title: 'My Theses',
           description: 'View and manage your submitted theses',
           icon: DocumentTextIcon,
@@ -301,6 +308,13 @@ const Dashboard = () => {
         bgMedium: '#fed7aa',
         bgDark: '#fdba74',
         border: '#fed7aa'
+      },
+      indigo: {
+        text: '#4f46e5',
+        bgLight: '#e0e7ff',
+        bgMedium: '#c7d2fe',
+        bgDark: '#a5b4fc',
+        border: '#c7d2fe'
       }
     };
     return colors[color] || colors.blue;
@@ -383,24 +397,6 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
-            
-            {/* Search Thesis Button for Students */}
-            {currentUser?.role !== 'admin' && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-                className="mt-6"
-              >
-                <button
-                  onClick={() => navigate('/thesis')}
-                  className="w-full px-6 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg font-semibold text-lg flex items-center justify-center gap-2"
-                >
-                  <BookOpenIcon className="h-6 w-6" />
-                  Search a Thesis
-                </button>
-              </motion.div>
-            )}
           </motion.div>
 
           {/* Statistics Cards */}
