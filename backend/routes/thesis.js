@@ -521,32 +521,57 @@ router.post('/:id/document', protect, uploadThesisDocument, handleUploadError, a
     const storageType = process.env.STORAGE_TYPE || 'local';
     let fileInfo;
     
+    console.log('File upload - Storage type:', storageType);
+    console.log('File upload - File info:', {
+      originalName: req.file.originalname,
+      filename: req.file.filename,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+      path: req.file.path
+    });
+    
     if (storageType === 'supabase') {
       // Check if Supabase is configured
       const { isConfigured } = require('../config/supabaseStorage');
+      console.log('Supabase Storage configured:', isConfigured());
+      
       if (!isConfigured()) {
-        console.error('Supabase Storage is not configured. Falling back to local storage.');
-        console.error('Please set SUPABASE_URL and SUPABASE_KEY environment variables.');
+        console.error('⚠️ Supabase Storage is not configured. Falling back to local storage.');
+        console.error('Please set SUPABASE_URL and SUPABASE_KEY environment variables in Render.');
+        console.error('Current values:', {
+          SUPABASE_URL: process.env.SUPABASE_URL ? 'SET' : 'NOT SET',
+          SUPABASE_KEY: process.env.SUPABASE_KEY ? 'SET' : 'NOT SET',
+          SUPABASE_STORAGE_BUCKET: process.env.SUPABASE_STORAGE_BUCKET || 'thesis-documents'
+        });
         // Fall back to local storage if Supabase is not configured
         fileInfo = getFileInfo(req.file);
       } else {
         // Upload to Supabase Storage
+        console.log('✅ Uploading to Supabase Storage...');
         const { uploadFile: uploadToCloud } = require('../config/cloudStorage');
         try {
           fileInfo = await uploadToCloud(req.file, 'thesis/documents');
+          console.log('✅ Supabase upload successful:', {
+            filename: fileInfo.filename,
+            url: fileInfo.url,
+            path: fileInfo.path
+          });
           // fileInfo.url contains the public URL
           // fileInfo.path contains the storage path
           // Store the URL in the database for Supabase
         } catch (error) {
-          console.error('Supabase upload error:', error);
-          console.error('Error details:', error.message, error.stack);
+          console.error('❌ Supabase upload error:', error);
+          console.error('Error message:', error.message);
+          console.error('Error code:', error.error || error.code);
+          console.error('Error stack:', error.stack);
           // Fall back to local storage if Supabase upload fails
-          console.warn('Falling back to local storage due to Supabase upload error');
+          console.warn('⚠️ Falling back to local storage due to Supabase upload error');
           fileInfo = getFileInfo(req.file);
         }
       }
     } else {
       // Local storage - get file info (includes checksum for integrity verification - Objective 1.4)
+      console.log('Using local storage (STORAGE_TYPE=' + storageType + ')');
       fileInfo = getFileInfo(req.file);
     }
 

@@ -14,6 +14,16 @@ let supabaseClient = null;
 
 if (supabaseUrl && supabaseKey) {
   supabaseClient = createClient(supabaseUrl, supabaseKey);
+  console.log('Supabase Storage client initialized:', {
+    url: supabaseUrl,
+    bucket: supabaseBucket,
+    hasKey: !!supabaseKey
+  });
+} else {
+  console.warn('Supabase Storage client NOT initialized. Missing:', {
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseKey
+  });
 }
 
 /**
@@ -65,6 +75,7 @@ async function uploadFile(file, folder = '') {
     const storagePath = folder ? `${folder}/${uniqueFileName}` : uniqueFileName;
 
     // Upload to Supabase Storage
+    console.log(`Uploading to Supabase Storage: bucket=${supabaseBucket}, path=${storagePath}, size=${fileBuffer.length} bytes`);
     const { data, error } = await supabaseClient.storage
       .from(supabaseBucket)
       .upload(storagePath, fileBuffer, {
@@ -73,13 +84,20 @@ async function uploadFile(file, folder = '') {
       });
 
     if (error) {
+      console.error('Supabase upload error:', error);
+      console.error('Error code:', error.error || error.message);
+      console.error('Error details:', JSON.stringify(error, null, 2));
       throw error;
     }
+
+    console.log('Supabase upload successful:', data);
 
     // Get public URL
     const { data: urlData } = supabaseClient.storage
       .from(supabaseBucket)
       .getPublicUrl(storagePath);
+    
+    console.log('Supabase file URL:', urlData.publicUrl);
 
     // Delete local file if it exists
     if (file.path && fs.existsSync(file.path)) {
