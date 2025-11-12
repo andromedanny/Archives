@@ -271,7 +271,8 @@ router.get('/:id/view', optionalAuth, async (req, res) => {
     if (!thesis.main_document || !thesis.main_document.path) {
       return res.status(404).json({
         success: false,
-        message: 'Document not found'
+        message: 'Document not found',
+        details: 'This thesis does not have a document uploaded yet.'
       });
     }
 
@@ -281,7 +282,23 @@ router.get('/:id/view', optionalAuth, async (req, res) => {
     // If path is a URL, redirect to it or proxy it
     if (filePath && (filePath.startsWith('http://') || filePath.startsWith('https://'))) {
       // Cloud storage URL - redirect to it
+      console.log('Redirecting to cloud storage URL:', filePath);
       return res.redirect(filePath);
+    }
+
+    // Check if Supabase Storage is configured and file might be in Supabase
+    const storageType = process.env.STORAGE_TYPE || 'local';
+    if (storageType === 'supabase') {
+      const { isConfigured, getFileUrl } = require('../config/supabaseStorage');
+      if (isConfigured()) {
+        // Try to construct Supabase URL from file path
+        // If file path is a storage path (not a full URL), try to get public URL
+        const supabaseUrl = getFileUrl(filePath);
+        if (supabaseUrl) {
+          console.log('File found in Supabase Storage, redirecting to:', supabaseUrl);
+          return res.redirect(supabaseUrl);
+        }
+      }
     }
 
     // Local file storage
@@ -292,9 +309,10 @@ router.get('/:id/view', optionalAuth, async (req, res) => {
 
     // Verify file exists
     if (!fs.existsSync(absolutePath)) {
-      console.error('File not found:', absolutePath);
+      console.error('File not found locally:', absolutePath);
       console.error('Stored path:', filePath);
       console.error('Current working directory:', process.cwd());
+      console.error('Storage type:', storageType);
       
       // Check if file might be in uploads directory
       const uploadsPath = path.resolve(process.cwd(), 'uploads', path.basename(filePath));
@@ -307,15 +325,25 @@ router.get('/:id/view', optionalAuth, async (req, res) => {
         return res.sendFile(correctPath);
       }
       
+      // File not found - provide helpful error message
+      const isSupabaseConfigured = storageType === 'supabase' && require('../config/supabaseStorage').isConfigured();
+      const errorMessage = isSupabaseConfigured
+        ? 'File not found on server. The file may have been deleted or the server was redeployed. Please re-upload the document. If this file was uploaded before Supabase Storage was configured, you will need to re-upload it.'
+        : 'File not found on server. This is because Render uses ephemeral storage - files are lost when the server redeploys. Please set up Supabase Storage for persistent file storage.';
+      
       return res.status(404).json({
         success: false,
-        message: 'File not found on server. The file may have been deleted or the server was redeployed. Please re-upload the document.',
-        details: process.env.NODE_ENV === 'development' ? {
+        message: errorMessage,
+        details: {
           storedPath: filePath,
           absolutePath: absolutePath,
           cwd: process.cwd(),
-          tip: 'On Render, files are lost on redeploy. Use Supabase Storage for persistent file storage.'
-        } : undefined
+          storageType: storageType,
+          supabaseConfigured: isSupabaseConfigured,
+          tip: storageType !== 'supabase' 
+            ? 'Set STORAGE_TYPE=supabase and configure SUPABASE_URL, SUPABASE_KEY, and SUPABASE_STORAGE_BUCKET in Render environment variables to enable persistent file storage.'
+            : 'Files uploaded before Supabase Storage was configured may need to be re-uploaded.'
+        }
       });
     }
 
@@ -401,7 +429,8 @@ router.get('/:id/download', optionalAuth, async (req, res) => {
     if (!thesis.main_document || !thesis.main_document.path) {
       return res.status(404).json({
         success: false,
-        message: 'Document not found'
+        message: 'Document not found',
+        details: 'This thesis does not have a document uploaded yet.'
       });
     }
 
@@ -412,9 +441,27 @@ router.get('/:id/download', optionalAuth, async (req, res) => {
     if (filePath && (filePath.startsWith('http://') || filePath.startsWith('https://'))) {
       // Cloud storage URL - redirect to it for download
       // Increment download count before redirecting
+      console.log('Redirecting to cloud storage URL for download:', filePath);
       await thesis.incrementDownloadCount();
       await logFileOperation(req, 'thesis.download', thesis.id, 'success');
       return res.redirect(filePath);
+    }
+
+    // Check if Supabase Storage is configured and file might be in Supabase
+    const storageType = process.env.STORAGE_TYPE || 'local';
+    if (storageType === 'supabase') {
+      const { isConfigured, getFileUrl } = require('../config/supabaseStorage');
+      if (isConfigured()) {
+        // Try to construct Supabase URL from file path
+        // If file path is a storage path (not a full URL), try to get public URL
+        const supabaseUrl = getFileUrl(filePath);
+        if (supabaseUrl) {
+          console.log('File found in Supabase Storage, redirecting to:', supabaseUrl);
+          await thesis.incrementDownloadCount();
+          await logFileOperation(req, 'thesis.download', thesis.id, 'success');
+          return res.redirect(supabaseUrl);
+        }
+      }
     }
 
     // Local file storage
@@ -425,9 +472,10 @@ router.get('/:id/download', optionalAuth, async (req, res) => {
 
     // Verify file exists
     if (!fs.existsSync(absolutePath)) {
-      console.error('File not found for download:', absolutePath);
+      console.error('File not found locally for download:', absolutePath);
       console.error('Stored path:', filePath);
       console.error('Current working directory:', process.cwd());
+      console.error('Storage type:', storageType);
       
       // Check if file might be in uploads directory
       const uploadsPath = path.resolve(process.cwd(), 'uploads', path.basename(filePath));
@@ -440,15 +488,25 @@ router.get('/:id/download', optionalAuth, async (req, res) => {
         return res.download(correctPath, fileName);
       }
       
+      // File not found - provide helpful error message
+      const isSupabaseConfigured = storageType === 'supabase' && require('../config/supabaseStorage').isConfigured();
+      const errorMessage = isSupabaseConfigured
+        ? 'File not found on server. The file may have been deleted or the server was redeployed. Please re-upload the document. If this file was uploaded before Supabase Storage was configured, you will need to re-upload it.'
+        : 'File not found on server. This is because Render uses ephemeral storage - files are lost when the server redeploys. Please set up Supabase Storage for persistent file storage.';
+      
       return res.status(404).json({
         success: false,
-        message: 'File not found on server. The file may have been deleted or the server was redeployed. Please re-upload the document.',
-        details: process.env.NODE_ENV === 'development' ? {
+        message: errorMessage,
+        details: {
           storedPath: filePath,
           absolutePath: absolutePath,
           cwd: process.cwd(),
-          tip: 'On Render, files are lost on redeploy. Use Supabase Storage for persistent file storage.'
-        } : undefined
+          storageType: storageType,
+          supabaseConfigured: isSupabaseConfigured,
+          tip: storageType !== 'supabase' 
+            ? 'Set STORAGE_TYPE=supabase and configure SUPABASE_URL, SUPABASE_KEY, and SUPABASE_STORAGE_BUCKET in Render environment variables to enable persistent file storage.'
+            : 'Files uploaded before Supabase Storage was configured may need to be re-uploaded.'
+        }
       });
     }
 
