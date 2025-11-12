@@ -4,6 +4,28 @@
 
 This guide shows you exactly what to enter in the Supabase Storage policy creation form.
 
+## ⚠️ Important: Policy Definition Field
+
+When you see the **Policy definition** field (also called "USING expression"), you have two options:
+
+### Option 1: Simple (Recommended) - Just type `true`
+```
+true
+```
+- This allows the operation for ALL files in the bucket
+- Simplest and easiest to set up
+- Works for most use cases
+
+### Option 2: Specific - Use bucket_id check
+```
+bucket_id = 'thesis-documents'
+```
+- This explicitly checks the bucket name
+- More specific but not necessary if policy is already scoped to the bucket
+- Use this if you want to be extra explicit
+
+**For this guide, we'll use Option 1 (just `true`)** because it's simpler and works perfectly.
+
 ## Step-by-Step Policy Creation
 
 ### Policy 1: Public Read Access (Required)
