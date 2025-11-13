@@ -6,10 +6,7 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-// FullCalendar CSS - v6 bundles CSS differently
-import '@fullcalendar/core/v4.css';
-import '@fullcalendar/daygrid/v4.css';
-import '@fullcalendar/timegrid/v4.css';
+// FullCalendar CSS is loaded via CDN in index.html
 import Header from '../../components/Layout/Header';
 import Footer from '../../components/Layout/Footer';
 import BackgroundImage from '../../components/UI/BackgroundImage';
