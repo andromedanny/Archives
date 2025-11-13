@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
@@ -64,8 +64,8 @@ const Calendar = () => {
     return colors[eventType] || colors.other;
   };
 
-  // Fetch events function for FullCalendar
-  const fetchEvents = async (info, successCallback, failureCallback) => {
+  // Fetch events function for FullCalendar - using useCallback to ensure stable reference
+  const fetchEvents = useCallback(async (info, successCallback, failureCallback) => {
     try {
       setIsLoading(true);
       const response = await calendarAPI.getEvents({
@@ -75,10 +75,14 @@ const Calendar = () => {
 
       if (response.data.success) {
         const transformedEvents = transformEvents(response.data.data || []);
-        successCallback(transformedEvents);
+        if (successCallback && typeof successCallback === 'function') {
+          successCallback(transformedEvents);
+        }
       } else {
         // Return empty array instead of calling failureCallback to prevent infinite retries
-        successCallback([]);
+        if (successCallback && typeof successCallback === 'function') {
+          successCallback([]);
+        }
       }
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -96,14 +100,16 @@ const Calendar = () => {
         }
       }
       // Return empty array instead of calling failureCallback to prevent infinite retries
-      successCallback([]);
+      if (successCallback && typeof successCallback === 'function') {
+        successCallback([]);
+      }
     } finally {
       // Always hide loading indicator - use a small timeout to ensure state updates properly
       setTimeout(() => {
         setIsLoading(false);
       }, 100);
     }
-  };
+  }, []);
 
   // Handle event click
   const handleEventClick = (clickInfo) => {
