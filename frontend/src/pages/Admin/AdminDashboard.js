@@ -616,6 +616,29 @@ const AdminDashboard = () => {
                   <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: 0.6 }}
+                    className="p-4 border-2 border-gray-200 rounded-xl hover:border-indigo-300 hover:shadow-lg transition-all duration-300 cursor-pointer group bg-gradient-to-br from-white to-gray-50 hover:from-indigo-50 hover:to-white transform hover:-translate-y-1"
+                    onClick={() => navigate('/thesis')}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="p-2 rounded-xl transition-all duration-300 transform group-hover:rotate-6"
+                        style={{
+                          background: `linear-gradient(to bottom right, #e0e7ff, #c7d2fe)`
+                        }}
+                      >
+                        <BookOpenIcon className="h-5 w-5 text-indigo-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-800">Thesis Archive</h3>
+                        <p className="text-sm text-gray-600">Browse public thesis archive</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                  
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3, delay: 0.7 }}
                     className="p-4 border-2 border-blue-200 rounded-xl hover:border-blue-400 hover:shadow-lg transition-all duration-300 cursor-pointer group bg-gradient-to-br from-blue-50 to-white hover:from-blue-100 hover:to-white transform hover:-translate-y-1"
                     onClick={() => navigate('/admin/departments?action=create')}

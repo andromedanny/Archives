@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, validationResult, query } = require('express-validator');
 const { Op } = require('sequelize');
+const { sequelize } = require('../config/database');
 const { Thesis, User, ThesisAuthors } = require('../models');
 const { protect, authorize, optionalAuth } = require('../middleware/auth');
 const { uploadThesisDocument, uploadSupplementaryFiles, handleUploadError, getFileInfo, verifyFileIntegrity } = require('../middleware/upload');
@@ -39,52 +40,54 @@ router.get('/', [
     const offset = (page - 1) * limit;
 
     // Build where clause (using snake_case to match database columns)
-    // Show published public theses, OR theses from the logged-in user's department
-    let where;
+    // Collect all conditions first, then combine them properly
+    const conditions = [];
+
+    // Base visibility condition: Show published public theses, OR theses from the logged-in user's department
     if (req.user && req.user.department) {
       // If user is logged in and has a department, show:
       // 1. All published public theses (from any department)
       // 2. All theses from user's department (regardless of status or is_public)
-      where = {
+      conditions.push({
         [Op.or]: [
           { is_public: true, status: 'Published' },
           { department: req.user.department }
         ]
-      };
+      });
     } else {
       // If not logged in, only show published public theses
-      where = { is_public: true, status: 'Published' };
+      conditions.push({ is_public: true, status: 'Published' });
     }
 
     // Search functionality (Objective 5.3: Advanced search)
     if (req.query.search) {
       const searchTerm = `%${req.query.search}%`;
-      // Combine search with existing where clause using Op.and
-      const searchConditions = {
-        [Op.or]: [
-          { title: { [Op.like]: searchTerm } },
-          { abstract: { [Op.like]: searchTerm } },
-          // Search in keywords (Objective 5.3: Keyword search)
-          { keywords: { [Op.like]: searchTerm } }
-        ]
-      };
-      // If where already has Op.or, wrap both in Op.and
-      if (where[Op.or]) {
-        where = {
-          [Op.and]: [
-            where,
-            searchConditions
-          ]
-        };
+      const searchConditions = [
+        { title: { [Op.like]: searchTerm } },
+        { abstract: { [Op.like]: searchTerm } }
+      ];
+      
+      // Search in keywords (JSON field) - cast to text for PostgreSQL/MySQL compatibility
+      // For PostgreSQL: cast JSON to text, for MySQL: use JSON_EXTRACT or CAST
+      const dbType = sequelize.getDialect();
+      if (dbType === 'postgres') {
+        searchConditions.push(
+          sequelize.where(
+            sequelize.cast(sequelize.col('keywords'), 'TEXT'),
+            { [Op.like]: searchTerm }
+          )
+        );
       } else {
-        // If where is simple, combine with Op.and
-        where = {
-          [Op.and]: [
-            where,
-            searchConditions
-          ]
-        };
+        // MySQL - keywords is JSON, use JSON_SEARCH or CAST
+        searchConditions.push(
+          sequelize.where(
+            sequelize.fn('CAST', sequelize.col('keywords'), 'CHAR'),
+            { [Op.like]: searchTerm }
+          )
+        );
       }
+      
+      conditions.push({ [Op.or]: searchConditions });
     }
 
     // Keyword search (Objective 5.3: Advanced search with keywords)
@@ -93,57 +96,59 @@ router.get('/', [
         ? req.query.keywords 
         : req.query.keywords.split(',').map(k => k.trim());
       
-      const keywordConditions = keywords.map(keyword => ({
-        keywords: { [Op.like]: `%${keyword}%` }
-      }));
+      const dbType = sequelize.getDialect();
+      const keywordConditions = keywords.map(keyword => {
+        const keywordTerm = `%${keyword}%`;
+        if (dbType === 'postgres') {
+          return sequelize.where(
+            sequelize.cast(sequelize.col('keywords'), 'TEXT'),
+            { [Op.like]: keywordTerm }
+          );
+        } else {
+          return sequelize.where(
+            sequelize.fn('CAST', sequelize.col('keywords'), 'CHAR'),
+            { [Op.like]: keywordTerm }
+          );
+        }
+      });
       
-      // Combine keyword search with existing where clause
-      const keywordSearchConditions = { [Op.or]: keywordConditions };
-      
-      if (where[Op.and]) {
-        // If where already has Op.and, add keyword search to it
-        where[Op.and].push(keywordSearchConditions);
-      } else {
-        // Wrap both in Op.and
-        where = {
-          [Op.and]: [
-            where,
-            keywordSearchConditions
-          ]
-        };
-      }
+      conditions.push({ [Op.or]: keywordConditions });
     }
 
     // Date range filtering (Objective 5.3: Date range search)
     if (req.query.dateFrom || req.query.dateTo) {
-      where.submitted_at = {};
+      const dateCondition = {};
       if (req.query.dateFrom) {
-        where.submitted_at[Op.gte] = new Date(req.query.dateFrom);
+        dateCondition[Op.gte] = new Date(req.query.dateFrom);
       }
       if (req.query.dateTo) {
-        where.submitted_at[Op.lte] = new Date(req.query.dateTo);
+        dateCondition[Op.lte] = new Date(req.query.dateTo);
       }
+      conditions.push({ submitted_at: dateCondition });
     }
 
     // Filter by department
     if (req.query.department) {
-      where.department = req.query.department;
+      conditions.push({ department: req.query.department });
     }
 
     // Filter by program
     if (req.query.program) {
-      where.program = req.query.program;
+      conditions.push({ program: req.query.program });
     }
 
     // Filter by academic year (convert camelCase to snake_case)
     if (req.query.academicYear) {
-      where.academic_year = req.query.academicYear;
+      conditions.push({ academic_year: req.query.academicYear });
     }
 
     // Filter by category
     if (req.query.category) {
-      where.category = req.query.category;
+      conditions.push({ category: req.query.category });
     }
+
+    // Combine all conditions with Op.and
+    const where = conditions.length === 1 ? conditions[0] : { [Op.and]: conditions };
 
     // Sort options (convert camelCase to snake_case)
     let sortBy = req.query.sortBy || 'published_at';
