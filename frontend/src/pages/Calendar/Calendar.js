@@ -77,12 +77,26 @@ const Calendar = () => {
         const transformedEvents = transformEvents(response.data.data || []);
         successCallback(transformedEvents);
       } else {
+        // Return empty array instead of calling failureCallback to prevent infinite retries
         successCallback([]);
       }
     } catch (error) {
       console.error('Error fetching events:', error);
-      toast.error('Failed to load calendar events');
-      failureCallback(error);
+      // Only show error if it's not a 401 (unauthorized) - user might not be logged in
+      if (error.response?.status !== 401) {
+        // Use a single toast that won't spam
+        const errorMessage = error.response?.data?.message || 'Failed to load calendar events';
+        // Only show toast if we haven't shown it recently (prevent spam)
+        if (!window.calendarErrorShown) {
+          toast.error(errorMessage);
+          window.calendarErrorShown = true;
+          setTimeout(() => {
+            window.calendarErrorShown = false;
+          }, 5000); // Reset after 5 seconds
+        }
+      }
+      // Return empty array instead of calling failureCallback to prevent infinite retries
+      successCallback([]);
     } finally {
       setIsLoading(false);
     }
@@ -163,7 +177,24 @@ const Calendar = () => {
               </div>
             )}
 
-            <div className="calendar-container">
+            <div className="calendar-container" style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '0.5rem' }}>
+              <style>{`
+                .fc {
+                  background-color: white !important;
+                }
+                .fc-theme-standard td, .fc-theme-standard th {
+                  border-color: #e5e7eb !important;
+                }
+                .fc-scrollgrid {
+                  background-color: white !important;
+                }
+                .fc-daygrid-day {
+                  background-color: white !important;
+                }
+                .fc-col-header-cell {
+                  background-color: #f9fafb !important;
+                }
+              `}</style>
               <FullCalendar
                 ref={calendarRef}
                 plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
