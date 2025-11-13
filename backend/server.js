@@ -22,8 +22,51 @@ const app = express();
 // This allows express-rate-limit to correctly identify client IPs
 app.set('trust proxy', true);
 
-// Security middleware
-app.use(helmet());
+// CORS must be configured BEFORE other middleware
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'https://onefaithonearchive.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:5173'
+].filter(Boolean); // Remove undefined values
+
+// CORS configuration - must be before other middleware
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // Allow if origin is in allowed list
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      // In production, allow Vercel domains
+      if (process.env.NODE_ENV === 'production' && origin.includes('vercel.app')) {
+        callback(null, true);
+      } else if (process.env.NODE_ENV === 'development') {
+        callback(null, true);
+      } else {
+        console.warn('CORS: Blocked origin:', origin);
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Length', 'Content-Type'],
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 200
+}));
+
+// Security middleware - configure helmet to not interfere with CORS
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false
+}));
 app.use(compression());
 
 // Health check endpoint (define BEFORE rate limiting to exclude it)
@@ -56,57 +99,26 @@ const limiter = rateLimit({
 // Apply rate limiting to API routes
 app.use('/api/', limiter);
 
-// CORS configuration
-const allowedOrigins = [
-  process.env.FRONTEND_URL,
-  'https://onefaithonearchive.vercel.app',
-  'http://localhost:3000',
-  'http://localhost:5173'
-].filter(Boolean); // Remove undefined values
-
-// Improved CORS configuration with explicit headers
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) {
-      return callback(null, true);
-    }
-    
-    // Allow if origin is in allowed list, or in development mode, or always allow in production for now
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'production') {
-      callback(null, true);
-    } else {
-      console.warn('CORS: Unknown origin:', origin);
-      // Still allow but log warning (can be restricted later)
-      callback(null, true);
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-  exposedHeaders: ['Content-Length', 'Content-Type'],
-  maxAge: 86400, // 24 hours
-  preflightContinue: false,
-  optionsSuccessStatus: 200
-}));
-
-// Additional CORS handling for edge cases
+// Additional CORS handling for edge cases (backup)
 app.use((req, res, next) => {
-  // Always set CORS headers if not already set
-  if (!res.headersSent) {
-    const origin = req.headers.origin;
-    if (origin && (allowedOrigins.includes(origin) || process.env.NODE_ENV === 'production')) {
-      res.header('Access-Control-Allow-Origin', origin);
-      res.header('Access-Control-Allow-Credentials', 'true');
-      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-      res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-    }
-    
-    // Handle OPTIONS preflight requests
-    if (req.method === 'OPTIONS') {
-      return res.status(200).end();
-    }
+  const origin = req.headers.origin;
+  
+  // Set CORS headers if origin is allowed
+  if (origin && (allowedOrigins.includes(origin) || 
+      (process.env.NODE_ENV === 'production' && origin.includes('vercel.app')) ||
+      process.env.NODE_ENV === 'development')) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Expose-Headers', 'Content-Length, Content-Type');
   }
+  
+  // Handle OPTIONS preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
   next();
 });
 
