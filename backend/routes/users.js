@@ -18,6 +18,14 @@ router.get('/', protect, [
   query('course').optional().trim(),
   query('search').optional().trim()
 ], async (req, res) => {
+  // Set timeout to prevent hanging requests (10 seconds)
+  let timeout;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeout = setTimeout(() => {
+      reject(new Error('Database query timeout'));
+    }, 10000); // 10 seconds timeout
+  });
+
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -64,7 +72,8 @@ router.get('/', protect, [
       ];
     }
 
-    const { count, rows: users } = await User.findAndCountAll({
+    // Race between database query and timeout
+    const queryPromise = User.findAndCountAll({
       where,
       attributes: { exclude: ['password'] },
       order: [['createdAt', 'DESC']],
@@ -72,20 +81,42 @@ router.get('/', protect, [
       offset
     });
 
-    res.json({
-      success: true,
-      count: users.length,
-      total: count,
-      page,
-      pages: Math.ceil(count / limit),
-      data: users
-    });
+    const { count, rows: users } = await Promise.race([queryPromise, timeoutPromise]);
+    
+    // Clear timeout if query completes successfully
+    clearTimeout(timeout);
+
+    // Ensure response is sent only once
+    if (!res.headersSent) {
+      res.json({
+        success: true,
+        count: users.length,
+        total: count,
+        page,
+        pages: Math.ceil(count / limit),
+        data: users
+      });
+    }
   } catch (error) {
-    console.error('Get users error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    // Clear timeout on error
+    if (timeout) clearTimeout(timeout);
+    
+    console.error('Get users error:', error.message);
+    console.error('Error stack:', error.stack);
+    
+    // Ensure response is sent only once
+    if (!res.headersSent) {
+      const statusCode = error.message === 'Database query timeout' ? 504 : 500;
+      const message = error.message === 'Database query timeout' 
+        ? 'Request timeout. Database may be slow or unavailable. Please try again.'
+        : 'Server error';
+      
+      res.status(statusCode).json({
+        success: false,
+        message: message,
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
   }
 });
 

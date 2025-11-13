@@ -434,8 +434,17 @@ router.get('/department-stats', protect, async (req, res) => {
 // @route   GET /api/dashboard/departments
 // @access  Private
 router.get('/departments', protect, async (req, res) => {
+  // Set timeout to prevent hanging requests (10 seconds)
+  let timeout;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeout = setTimeout(() => {
+      reject(new Error('Database query timeout'));
+    }, 10000); // 10 seconds timeout
+  });
+
   try {
-    const departments = await Department.findAll({
+    // Race between database query and timeout
+    const queryPromise = Department.findAll({
       where: { is_active: true },
       include: [{
         model: Course,
@@ -447,19 +456,39 @@ router.get('/departments', protect, async (req, res) => {
       order: [['name', 'ASC']]
     });
 
-    res.json({
-      success: true,
-      count: departments.length,
-      data: departments
-    });
+    const departments = await Promise.race([queryPromise, timeoutPromise]);
+    
+    // Clear timeout if query completes successfully
+    clearTimeout(timeout);
+
+    // Ensure response is sent only once
+    if (!res.headersSent) {
+      res.json({
+        success: true,
+        count: departments.length,
+        data: departments
+      });
+    }
   } catch (error) {
-    console.error('Get departments error:', error);
+    // Clear timeout on error
+    if (timeout) clearTimeout(timeout);
+    
+    console.error('Get departments error:', error.message);
     console.error('Error stack:', error.stack);
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    
+    // Ensure response is sent only once
+    if (!res.headersSent) {
+      const statusCode = error.message === 'Database query timeout' ? 504 : 500;
+      const message = error.message === 'Database query timeout' 
+        ? 'Request timeout. Database may be slow or unavailable. Please try again.'
+        : 'Server error';
+      
+      res.status(statusCode).json({
+        success: false,
+        message: message,
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
   }
 });
 
