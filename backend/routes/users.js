@@ -192,7 +192,8 @@ router.post('/', protect, authorize('admin'), [
       });
     }
 
-    const user = await User.create({
+    // Prepare user data for creation
+    const createData = {
       firstName: req.body.firstName,
       lastName: req.body.lastName,
       email: req.body.email,
@@ -200,24 +201,55 @@ router.post('/', protect, authorize('admin'), [
       role: req.body.role,
       department: req.body.department,
       student_id: req.body.studentId || null,
-      phone: req.body.phone || null,
-      isActive: true
-    });
+      is_active: true
+    };
+    
+    // Only include phone if it's provided and not empty
+    if (req.body.phone && req.body.phone.trim() !== '') {
+      createData.phone = req.body.phone.trim();
+    }
+
+    const user = await User.create(createData);
 
     const userData = user.toJSON();
     delete userData.password;
 
-    res.status(201).json({
-      success: true,
-      message: 'User created successfully',
-      data: userData
-    });
+    // Ensure response is sent only once
+    if (!res.headersSent) {
+      res.status(201).json({
+        success: true,
+        message: 'User created successfully',
+        data: userData
+      });
+    }
   } catch (error) {
-    console.error('Create user error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    console.error('Create user error:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', JSON.stringify(error, null, 2));
+    
+    // Handle specific database errors
+    let errorMessage = 'Server error';
+    let statusCode = 500;
+    
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      errorMessage = 'Email or student ID already exists';
+      statusCode = 400;
+    } else if (error.name === 'SequelizeValidationError') {
+      errorMessage = error.errors.map(e => e.message).join(', ');
+      statusCode = 400;
+    } else if (error.name === 'SequelizeDatabaseError') {
+      errorMessage = 'Database error. Please check the logs.';
+      statusCode = 500;
+    }
+    
+    // Ensure response is sent only once
+    if (!res.headersSent) {
+      res.status(statusCode).json({
+        success: false,
+        message: errorMessage,
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
   }
 });
 
