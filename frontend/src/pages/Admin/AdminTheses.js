@@ -281,8 +281,8 @@ const AdminTheses = () => {
         ? `${baseURL}/thesis/${thesisId}/view?token=${token}` 
         : `${baseURL}/thesis/${thesisId}/view`;
       
-      // Open PDF in new tab
-      window.open(pdfUrl, '_blank');
+      // Open PDF in the same window (direct viewing)
+      window.location.href = pdfUrl;
     } catch (error) {
       console.error('Error opening PDF:', error);
       toast.error('Failed to open PDF. Please try again.');
@@ -510,7 +510,7 @@ const AdminTheses = () => {
                           <td className="px-4 py-3 text-sm border-b">
                             <div className="flex gap-2 flex-wrap">
                               <button
-                                onClick={() => window.open(`/thesis/${thesis.id}`, '_blank')}
+                                onClick={() => handleViewPDF(thesis.id)}
                                 className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
                               >
                                 <EyeIcon className="h-4 w-4" />

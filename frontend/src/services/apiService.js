@@ -190,7 +190,7 @@ class ApiService {
 
   async getAdminTheses(filters = {}) {
     const queryParams = new URLSearchParams(filters).toString();
-    const response = await fetch(`${this.baseURL}/admin/theses?${queryParams}`, {
+    const response = await fetch(`${this.baseURL}/admin/thesis?${queryParams}`, {
       headers: this.getHeaders()
     });
     return this.handleResponse(response);

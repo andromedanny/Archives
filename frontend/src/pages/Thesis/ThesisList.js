@@ -5,12 +5,13 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Layout/Header';
 import Footer from '../../components/Layout/Footer';
 import BackgroundImage from '../../components/UI/BackgroundImage';
-import { thesisAPI } from '../../services/api';
+import { thesisAPI, departmentsAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
 const ThesisList = () => {
   const navigate = useNavigate();
   const [theses, setTheses] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [filters, setFilters] = useState({
     search: '',
     keywords: '',
@@ -98,6 +99,22 @@ const ThesisList = () => {
     }
   };
 
+  // Fetch departments on mount (public access)
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const response = await departmentsAPI.getDepartments();
+        if (response.data && response.data.success) {
+          setDepartments(response.data.data || []);
+        }
+      } catch (error) {
+        console.error('Error fetching departments:', error);
+        // Silently fail - department filter will show text input instead
+      }
+    };
+    fetchDepartments();
+  }, []);
+
   // Fetch theses when filters or page changes (Objective 5.3: Advanced search)
   useEffect(() => {
     fetchTheses();
@@ -116,7 +133,7 @@ const ThesisList = () => {
     setFilters({
       search: '',
       keywords: '',
-      program: '',
+      program: '', // Keep for backward compatibility but not shown in UI
       department: '',
       academicYear: '',
       category: '',
@@ -247,22 +264,36 @@ const ThesisList = () => {
                 </div>
               </div>
 
-              {/* Category and Program Filters */}
+              {/* Category, Department, and Academic Year Filters */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Program
+                    Department
                   </label>
-                  <select
-                    value={filters.program}
-                    onChange={(e) => handleFilterChange('program', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">All Programs</option>
-                    <option value="BSCS">BSCS</option>
-                    <option value="BSIT">BSIT</option>
-                    <option value="BSEMC">BSEMC</option>
-                  </select>
+                  {departments.length > 0 ? (
+                    <select
+                      value={filters.department}
+                      onChange={(e) => handleFilterChange('department', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">All Departments</option>
+                      {departments
+                        .filter(dept => dept.is_active !== false)
+                        .map((dept) => (
+                          <option key={dept.id} value={dept.name}>
+                            {dept.name}
+                          </option>
+                        ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={filters.department}
+                      onChange={(e) => handleFilterChange('department', e.target.value)}
+                      placeholder="Enter department name..."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  )}
                 </div>
                 
                 <div>

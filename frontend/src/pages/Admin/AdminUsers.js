@@ -11,7 +11,6 @@ import {
   PencilIcon, 
   TrashIcon, 
   EyeIcon,
-  EyeSlashIcon,
   CheckIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline';
@@ -264,17 +263,6 @@ const AdminUsers = () => {
     }
   };
 
-  const handleToggleStatus = async (userId) => {
-    try {
-      const user = users.find(u => u.id === userId);
-      await usersAPI.updateUser(userId, { isActive: !user.isActive });
-      toast.success(`User ${!user.isActive ? 'activated' : 'deactivated'} successfully`);
-      fetchUsers();
-    } catch (error) {
-      console.error('Error toggling user status:', error);
-      toast.error(error.response?.data?.message || 'Failed to update user status');
-    }
-  };
 
 
   return (
@@ -329,8 +317,6 @@ const AdminUsers = () => {
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Email</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Role</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Department</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Join Date</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Status</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Actions</th>
                     </tr>
                   </thead>
@@ -359,18 +345,6 @@ const AdminUsers = () => {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600 border-b">{user.department}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600 border-b">
-                          {new Date(user.joinDate).toLocaleDateString()}
-                        </td>
-                        <td className="px-4 py-3 text-sm border-b">
-                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                            user.isActive 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {user.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
                         <td className="px-4 py-3 text-sm border-b">
                           <div className="flex gap-2">
                             <button
@@ -379,17 +353,6 @@ const AdminUsers = () => {
                             >
                               <PencilIcon className="h-4 w-4" />
                               Edit
-                            </button>
-                            <button
-                              onClick={() => handleToggleStatus(user.id)}
-                              className={`flex items-center gap-1 px-3 py-1 rounded hover:opacity-80 transition-colors ${
-                                user.isActive
-                                  ? 'bg-yellow-600 text-white'
-                                  : 'bg-green-600 text-white'
-                              }`}
-                            >
-                              {user.isActive ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
-                              {user.isActive ? 'Deactivate' : 'Activate'}
                             </button>
                             <button
                               onClick={() => handleDelete(user.id)}

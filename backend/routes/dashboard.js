@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { Thesis, User, Department, Calendar, Course } = require('../models');
-const { protect } = require('../middleware/auth');
+const { protect, optionalAuth } = require('../middleware/auth');
 
 // Test route to verify server is working
 router.get('/test', (req, res) => {
@@ -430,10 +430,10 @@ router.get('/department-stats', protect, async (req, res) => {
   }
 });
 
-// @desc    Get all departments (accessible to all authenticated users)
+// @desc    Get all departments (public access for filtering)
 // @route   GET /api/dashboard/departments
-// @access  Private
-router.get('/departments', protect, async (req, res) => {
+// @access  Public
+router.get('/departments', optionalAuth, async (req, res) => {
   // Set timeout to prevent hanging requests (10 seconds)
   let timeout;
   const timeoutPromise = new Promise((_, reject) => {
