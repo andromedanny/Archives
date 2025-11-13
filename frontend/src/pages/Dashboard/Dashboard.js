@@ -114,7 +114,7 @@ const Dashboard = () => {
           value: baseStats.totalTheses || 0,
           icon: BookOpenIcon,
           color: 'blue',
-          link: '/admin/theses'
+          link: '/admin/thesis'
         },
         {
           title: 'Total Users',
@@ -135,7 +135,7 @@ const Dashboard = () => {
           value: baseStats.recentSubmissions || 0,
           icon: ClockIcon,
           color: 'orange',
-          link: '/admin/theses?filter=recent'
+          link: '/admin/thesis?filter=recent'
         }
       ];
     } else {
@@ -180,7 +180,7 @@ const Dashboard = () => {
           description: 'Review and manage thesis submissions',
           icon: BookOpenIcon,
           color: 'blue',
-          link: '/admin/theses'
+          link: '/admin/thesis'
         },
         {
           title: 'Manage Users',
@@ -202,6 +202,37 @@ const Dashboard = () => {
           icon: AcademicCapIcon,
           color: 'orange',
           link: '/admin/departments'
+        }
+      ];
+    } else if (currentUser?.role === 'adviser') {
+      return [
+        {
+          title: 'Department Theses',
+          description: 'Review and manage theses in your department',
+          icon: BookOpenIcon,
+          color: 'blue',
+          link: '/adviser/theses'
+        },
+        {
+          title: 'Show all available Thesis',
+          description: 'Browse all available theses',
+          icon: BookOpenIcon,
+          color: 'indigo',
+          link: '/thesis'
+        },
+        {
+          title: 'View Calendar',
+          description: 'View upcoming thesis defenses and events',
+          icon: CalendarIcon,
+          color: 'purple',
+          link: '/calendar'
+        },
+        {
+          title: 'Profile',
+          description: 'Update your profile information',
+          icon: UserGroupIcon,
+          color: 'orange',
+          link: '/profile'
         }
       ];
     } else {
@@ -392,7 +423,7 @@ const Dashboard = () => {
                     Welcome back, {currentUser?.firstName || 'User'}!
                   </h1>
                   <p className="text-lg text-blue-100">
-                    {currentUser?.role === 'admin' ? 'Administrative Dashboard' : 'Student Dashboard'}
+                    {currentUser?.role === 'admin' ? 'Administrative Dashboard' : ''}
                   </p>
                 </div>
               </div>
