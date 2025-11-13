@@ -88,16 +88,40 @@ const CalendarCreate = () => {
     setIsSubmitting(true);
     
     try {
+      // Validate required fields
+      if (!formData.title || !formData.title.trim()) {
+        toast.error('Event title is required');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      if (!formData.event_date) {
+        toast.error('Event date is required');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      if (!formData.department || !formData.department.trim()) {
+        toast.error('Department is required');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Prepare event data with proper formatting
       const eventData = {
-        title: formData.title,
-        description: formData.description,
+        title: formData.title.trim(),
+        description: formData.description ? formData.description.trim() : '',
         event_date: new Date(formData.event_date).toISOString(),
-        end_date: formData.end_date ? new Date(formData.end_date).toISOString() : null,
-        location: formData.location,
+        location: formData.location ? formData.location.trim() : '',
         event_type: formData.event_type,
-        department: formData.department,
+        department: formData.department.trim(),
         is_public: formData.is_public
       };
+
+      // Only add end_date if it's provided and not empty
+      if (formData.end_date && formData.end_date.trim()) {
+        eventData.end_date = new Date(formData.end_date).toISOString();
+      }
 
       if (isEditMode) {
         await calendarAPI.updateEvent(editId, eventData);
@@ -110,7 +134,12 @@ const CalendarCreate = () => {
       navigate('/calendar');
     } catch (error) {
       console.error('Error saving event:', error);
-      toast.error(error.response?.data?.message || `Failed to ${isEditMode ? 'update' : 'create'} event`);
+      // Show more detailed error message
+      const errorMessage = error.response?.data?.message || 
+                          (error.response?.data?.errors ? 
+                            error.response.data.errors.map(e => e.msg).join(', ') : 
+                            `Failed to ${isEditMode ? 'update' : 'create'} event`);
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
