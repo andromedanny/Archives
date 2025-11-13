@@ -43,10 +43,10 @@ api.interceptors.response.use(
       const backendUrl = api.defaults.baseURL || import.meta.env?.VITE_API_URL || '/api';
       console.error(`Backend URL: ${backendUrl}`);
       console.error('Possible causes:');
-      console.error('1. Backend service is sleeping (Render free tier sleeps after 15 min)');
-      console.error('2. Backend service is not running');
-      console.error('3. Backend URL is incorrect');
-      console.error('4. Network connectivity issue');
+      console.error('1. Backend service is not running');
+      console.error('2. Backend URL is incorrect');
+      console.error('3. Network connectivity issue');
+      console.error('4. CORS configuration issue');
       // Don't show toast for network errors to avoid spam, let components handle it
     }
     

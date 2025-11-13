@@ -31,11 +31,11 @@ const AdminUsers = () => {
     password: '',
     role: 'student',
     department: '',
-    studentId: '',
     phone: '',
     isActive: true
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [emailManuallyEdited, setEmailManuallyEdited] = useState(false);
 
   // Check URL parameter to open add modal
   useEffect(() => {
@@ -92,11 +92,11 @@ const AdminUsers = () => {
       password: '', // Don't populate password when editing
       role: user.role,
       department: user.department,
-      studentId: user.studentId || '',
       phone: user.phone || '',
       isActive: user.isActive
     });
     setShowPassword(false);
+    setEmailManuallyEdited(true);
     setShowEditModal(true);
   };
 
@@ -109,12 +109,64 @@ const AdminUsers = () => {
       password: '',
       role: 'student',
       department: '',
-      studentId: '',
       phone: '',
       isActive: true
     });
     setShowPassword(false);
+    setEmailManuallyEdited(false);
     setShowAddModal(true);
+  };
+
+  // Generate email suggestion from first name and last name
+  const generateEmailSuggestion = (firstName, lastName, role) => {
+    if (!firstName || !lastName) return '';
+    
+    // Get first letter of first name (lowercase)
+    const firstInitial = firstName.charAt(0).toLowerCase();
+    
+    // Get last name, remove spaces, convert to lowercase
+    const lastPart = lastName.replace(/\s+/g, '').toLowerCase();
+    
+    // Combine: firstInitial + lastPart
+    const emailLocal = `${firstInitial}${lastPart}`;
+    
+    // For now, always use @gmail.com (can be extended based on role if needed)
+    return `${emailLocal}@gmail.com`;
+  };
+
+  // Handle input change with email auto-suggestion
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    const newFormData = {
+      ...formData,
+      [name]: type === 'checkbox' ? checked : value
+    };
+
+    // Track if email is manually edited
+    if (name === 'email') {
+      setEmailManuallyEdited(true);
+      // Just update formData without changing email suggestion
+      setFormData(newFormData);
+      return;
+    }
+
+    // If firstName or lastName changes, update email suggestion (only if email hasn't been manually edited)
+    if (!emailManuallyEdited && (name === 'firstName' || name === 'lastName')) {
+      // newFormData already has the updated value for the field being changed
+      if (newFormData.firstName && newFormData.lastName) {
+        newFormData.email = generateEmailSuggestion(newFormData.firstName, newFormData.lastName, newFormData.role);
+      } else {
+        // Clear email if either name is empty
+        newFormData.email = '';
+      }
+    }
+
+    // If role changes, update email suggestion if both names exist and email hasn't been manually edited
+    if (!emailManuallyEdited && name === 'role' && newFormData.firstName && newFormData.lastName) {
+      newFormData.email = generateEmailSuggestion(newFormData.firstName, newFormData.lastName, value);
+    }
+
+    setFormData(newFormData);
   };
 
   const handleSave = async () => {
@@ -159,11 +211,11 @@ const AdminUsers = () => {
         password: '',
         role: 'student',
         department: '',
-        studentId: '',
         phone: '',
         isActive: true
       });
       setShowPassword(false);
+      setEmailManuallyEdited(false);
       setEditingUser(null);
     } catch (error) {
       console.error('Error saving user:', error);
@@ -227,13 +279,6 @@ const AdminUsers = () => {
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-  };
 
   return (
     <>
@@ -287,7 +332,6 @@ const AdminUsers = () => {
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Email</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Role</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Department</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Student ID</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Phone</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Join Date</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Status</th>
@@ -319,9 +363,6 @@ const AdminUsers = () => {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600 border-b">{user.department}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600 border-b">
-                          {user.studentId || '-'}
-                        </td>
                         <td className="px-4 py-3 text-sm text-gray-600 border-b">
                           {user.phone || '-'}
                         </td>
@@ -431,6 +472,30 @@ const AdminUsers = () => {
               </div>
 
               <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                    Role *
+                  </label>
+                  <select
+                    name="role"
+                    value={formData.role}
+                    onChange={handleInputChange}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                  >
+                    <option value="student">Student</option>
+                    <option value="faculty">Faculty</option>
+                    <option value="admin">Admin</option>
+                    <option value="adviser">Adviser</option>
+                  </select>
+                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
@@ -491,7 +556,7 @@ const AdminUsers = () => {
                       borderRadius: '6px',
                       fontSize: '14px'
                     }}
-                    placeholder="Enter email address"
+                    placeholder="Email will be auto-suggested"
                   />
                 </div>
 
@@ -547,96 +612,50 @@ const AdminUsers = () => {
                   </p>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
-                      Role *
-                    </label>
-                    <select
-                      name="role"
-                      value={formData.role}
-                      onChange={handleInputChange}
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '6px',
-                        fontSize: '14px'
-                      }}
-                    >
-                      <option value="student">Student</option>
-                      <option value="faculty">Faculty</option>
-                      <option value="admin">Admin</option>
-                      <option value="adviser">Adviser</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
-                      Department *
-                    </label>
-                    <select
-                      name="department"
-                      value={formData.department}
-                      onChange={handleInputChange}
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '6px',
-                        fontSize: '14px'
-                      }}
-                    >
-                      <option value="">Select Department</option>
-                      {departments.filter(d => d.is_active).map((dept) => (
-                        <option key={dept.id} value={dept.name}>
-                          {dept.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                    Department *
+                  </label>
+                  <select
+                    name="department"
+                    value={formData.department}
+                    onChange={handleInputChange}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                  >
+                    <option value="">Select Department</option>
+                    {departments.filter(d => d.is_active).map((dept) => (
+                      <option key={dept.id} value={dept.name}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
-                      Student ID
-                    </label>
-                    <input
-                      type="text"
-                      name="studentId"
-                      value={formData.studentId}
-                      onChange={handleInputChange}
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '6px',
-                        fontSize: '14px'
-                      }}
-                      placeholder="Enter student ID"
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
-                      Phone Number
-                    </label>
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleInputChange}
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '6px',
-                        fontSize: '14px'
-                      }}
-                      placeholder="Enter phone number"
-                    />
-                  </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                    placeholder="Enter phone number"
+                  />
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -747,6 +766,30 @@ const AdminUsers = () => {
               </div>
 
               <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                    Role *
+                  </label>
+                  <select
+                    name="role"
+                    value={formData.role}
+                    onChange={handleInputChange}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                  >
+                    <option value="student">Student</option>
+                    <option value="faculty">Faculty</option>
+                    <option value="admin">Admin</option>
+                    <option value="adviser">Adviser</option>
+                  </select>
+                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
@@ -867,94 +910,49 @@ const AdminUsers = () => {
                   )}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
-                      Role *
-                    </label>
-                    <select
-                      name="role"
-                      value={formData.role}
-                      onChange={handleInputChange}
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '6px',
-                        fontSize: '14px'
-                      }}
-                    >
-                      <option value="student">Student</option>
-                      <option value="faculty">Faculty</option>
-                      <option value="admin">Admin</option>
-                      <option value="adviser">Adviser</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
-                      Department *
-                    </label>
-                    <select
-                      name="department"
-                      value={formData.department}
-                      onChange={handleInputChange}
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '6px',
-                        fontSize: '14px'
-                      }}
-                    >
-                      <option value="">Select Department</option>
-                      {departments.filter(d => d.is_active).map((dept) => (
-                        <option key={dept.id} value={dept.name}>
-                          {dept.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                    Department *
+                  </label>
+                  <select
+                    name="department"
+                    value={formData.department}
+                    onChange={handleInputChange}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                  >
+                    <option value="">Select Department</option>
+                    {departments.filter(d => d.is_active).map((dept) => (
+                      <option key={dept.id} value={dept.name}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
-                      Student ID
-                    </label>
-                    <input
-                      type="text"
-                      name="studentId"
-                      value={formData.studentId}
-                      onChange={handleInputChange}
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '6px',
-                        fontSize: '14px'
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
-                      Phone Number
-                    </label>
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleInputChange}
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '6px',
-                        fontSize: '14px'
-                      }}
-                    />
-                  </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                  />
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center' }}>
