@@ -37,6 +37,9 @@ import AdminUsers from './pages/Admin/AdminUsers';
 import AdminDepartments from './pages/Admin/AdminDepartments';
 import AdminAnalytics from './pages/Admin/AdminAnalytics';
 
+// Adviser Pages
+import AdviserTheses from './pages/Adviser/AdviserTheses';
+
 // Protected Route Component
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 
@@ -130,7 +133,7 @@ function App() {
               <AdminDashboard />
             </ProtectedRoute>
           } />
-          <Route path="admin/theses" element={
+          <Route path="admin/thesis" element={
             <ProtectedRoute allowedRoles={['admin']}>
               <AdminTheses />
             </ProtectedRoute>
@@ -148,6 +151,13 @@ function App() {
           <Route path="admin/analytics" element={
             <ProtectedRoute allowedRoles={['admin']}>
               <AdminAnalytics />
+            </ProtectedRoute>
+          } />
+
+          {/* Adviser Routes */}
+          <Route path="adviser/theses" element={
+            <ProtectedRoute allowedRoles={['adviser']}>
+              <AdviserTheses />
             </ProtectedRoute>
           } />
         </Route>

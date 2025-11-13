@@ -136,6 +136,7 @@ export const thesisAPI = {
     return `${baseURL}/thesis/${id}/view`;
   },
   getMyTheses: () => api.get('/thesis/user/my-theses'),
+  getAdviserDepartmentTheses: (params) => api.get('/thesis/adviser/department-theses', { params }),
   searchTheses: (query, filters) => api.get('/thesis', { params: { search: query, ...filters } }),
 };
 

@@ -30,10 +30,14 @@ const navigation = [
 
 const adminNavigation = [
   { name: 'Admin Dashboard', href: '/admin', icon: ChartBarIcon, roles: ['admin'] },
-  { name: 'Manage Theses', href: '/admin/theses', icon: ClipboardDocumentListIcon, roles: ['admin'] },
+  { name: 'Manage Theses', href: '/admin/thesis', icon: ClipboardDocumentListIcon, roles: ['admin'] },
   { name: 'Manage Users', href: '/admin/users', icon: UserGroupIcon, roles: ['admin'] },
   { name: 'Departments', href: '/admin/departments', icon: BuildingOfficeIcon, roles: ['admin'] },
   { name: 'Analytics', href: '/admin/analytics', icon: ChartPieIcon, roles: ['admin'] },
+];
+
+const adviserNavigation = [
+  { name: 'Department Theses', href: '/adviser/theses', icon: ClipboardDocumentListIcon, roles: ['adviser'] },
 ];
 
 const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
@@ -45,6 +49,10 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
   );
 
   const filteredAdminNavigation = adminNavigation.filter(item => 
+    item.roles.includes(user?.role)
+  );
+
+  const filteredAdviserNavigation = adviserNavigation.filter(item => 
     item.roles.includes(user?.role)
   );
 
@@ -137,6 +145,41 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
                       </Link>
                     ))}
                     
+                    {filteredAdviserNavigation.length > 0 && (
+                      <>
+                        <div className="border-t border-gray-200 my-4"></div>
+                        <div className="px-2">
+                          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            Adviser
+                          </h3>
+                        </div>
+                        {filteredAdviserNavigation.map((item) => (
+                          <Link
+                            key={item.name}
+                            to={item.href}
+                            className={clsx(
+                              location.pathname === item.href
+                                ? 'bg-primary-100 text-primary-900'
+                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+                              'group flex items-center px-2 py-2 text-base font-medium rounded-md'
+                            )}
+                            onClick={() => setSidebarOpen(false)}
+                          >
+                            <item.icon
+                              className={clsx(
+                                location.pathname === item.href
+                                  ? 'text-primary-500'
+                                  : 'text-gray-400 group-hover:text-gray-500',
+                                'mr-4 flex-shrink-0 h-6 w-6'
+                              )}
+                              aria-hidden="true"
+                            />
+                            {item.name}
+                          </Link>
+                        ))}
+                      </>
+                    )}
+                    
                     {filteredAdminNavigation.length > 0 && (
                       <>
                         <div className="border-t border-gray-200 my-4"></div>
@@ -223,6 +266,40 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
                     {item.name}
                   </Link>
                 ))}
+                
+                {filteredAdviserNavigation.length > 0 && (
+                  <>
+                    <div className="border-t border-gray-200 my-4"></div>
+                    <div className="px-2">
+                      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Adviser
+                      </h3>
+                    </div>
+                    {filteredAdviserNavigation.map((item) => (
+                      <Link
+                        key={item.name}
+                        to={item.href}
+                        className={clsx(
+                          location.pathname === item.href
+                            ? 'bg-primary-100 text-primary-900'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+                          'group flex items-center px-2 py-2 text-sm font-medium rounded-md'
+                        )}
+                      >
+                        <item.icon
+                          className={clsx(
+                            location.pathname === item.href
+                              ? 'text-primary-500'
+                              : 'text-gray-400 group-hover:text-gray-500',
+                            'mr-3 flex-shrink-0 h-6 w-6'
+                          )}
+                          aria-hidden="true"
+                        />
+                        {item.name}
+                      </Link>
+                    ))}
+                  </>
+                )}
                 
                 {filteredAdminNavigation.length > 0 && (
                   <>

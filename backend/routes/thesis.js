@@ -45,15 +45,21 @@ router.get('/', [
 
     // Base visibility condition: Show published public theses, OR theses from the logged-in user's department
     if (req.user && req.user.department) {
-      // If user is logged in and has a department, show:
-      // 1. All published public theses (from any department)
-      // 2. All theses from user's department (regardless of status or is_public)
-      conditions.push({
-        [Op.or]: [
-          { is_public: true, status: 'Published' },
-          { department: req.user.department }
-        ]
-      });
+      // If user is logged in and has a department:
+      if (req.user.role === 'adviser') {
+        // Advisers see ALL theses from their department (regardless of status or is_public)
+        conditions.push({ department: req.user.department });
+      } else {
+        // Other users see:
+        // 1. All published public theses (from any department)
+        // 2. All theses from user's department (regardless of status or is_public)
+        conditions.push({
+          [Op.or]: [
+            { is_public: true, status: 'Published' },
+            { department: req.user.department }
+          ]
+        });
+      }
     } else {
       // If not logged in, only show published public theses
       conditions.push({ is_public: true, status: 'Published' });
@@ -195,6 +201,75 @@ router.get('/', [
     });
   } catch (error) {
     console.error('Get theses error:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// @desc    Get adviser's department theses
+// @route   GET /api/thesis/adviser/department-theses
+// @access  Private (Adviser)
+// NOTE: This route MUST come before /:id to avoid route conflicts
+router.get('/adviser/department-theses', protect, async (req, res) => {
+  try {
+    // Check if user is an adviser
+    if (req.user.role !== 'adviser') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only advisers can access this endpoint'
+      });
+    }
+
+    if (!req.user.department) {
+      return res.status(400).json({
+        success: false,
+        message: 'Adviser must have a department assigned'
+      });
+    }
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    // Get all theses from adviser's department
+    const { count, rows: theses } = await Thesis.findAndCountAll({
+      where: {
+        department: req.user.department
+      },
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id', 'firstName', 'lastName'],
+          through: { attributes: [] }
+        },
+        {
+          model: User,
+          as: 'adviser',
+          attributes: ['id', 'firstName', 'lastName'],
+          required: false
+        }
+      ],
+      order: [['createdAt', 'DESC']],
+      limit,
+      offset,
+      distinct: true
+    });
+
+    res.json({
+      success: true,
+      count: theses.length,
+      total: count,
+      page,
+      pages: Math.ceil(count / limit),
+      data: theses
+    });
+  } catch (error) {
+    console.error('Get adviser department theses error:', error);
     console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
@@ -1030,32 +1105,56 @@ router.put('/:id', protect, [
       });
     }
 
-    // Check if user is author or admin
+    // Check if user is author, admin, or adviser in the same department
     const authorIds = thesis.authors.map(a => a.id);
     const isAuthor = authorIds.includes(req.user.id);
+    const isAdmin = req.user.role === 'admin';
+    const isAdviser = req.user.role === 'adviser';
+    const isAdviserInDepartment = isAdviser && req.user.department && thesis.department === req.user.department;
     
-    if (!isAuthor && req.user.role !== 'admin') {
+    if (!isAuthor && !isAdmin && !isAdviserInDepartment) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to update this thesis'
       });
     }
 
-    // Only allow status updates if admin, or if author updating to Under Review
-    if (req.body.status && req.user.role !== 'admin') {
-      if (req.body.status !== 'Under Review' && thesis.status !== 'Draft') {
-        return res.status(400).json({
+    // Status update permissions
+    if (req.body.status) {
+      // Only admins can publish theses
+      if (req.body.status === 'Published' && !isAdmin) {
+        return res.status(403).json({
           success: false,
-          message: 'Cannot update thesis status. Only admins can change status.'
+          message: 'Only administrators can publish theses. Advisers can approve or reject.'
         });
+      }
+      
+      // Advisers can only approve or reject theses in their department
+      if (isAdviserInDepartment && !isAdmin) {
+        if (req.body.status !== 'Approved' && req.body.status !== 'Rejected') {
+          return res.status(403).json({
+            success: false,
+            message: 'Advisers can only approve or reject theses. Only administrators can publish.'
+          });
+        }
+      }
+      
+      // Authors can only update status to "Under Review" from "Draft"
+      if (isAuthor && !isAdmin && !isAdviserInDepartment) {
+        if (req.body.status !== 'Under Review' || thesis.status !== 'Draft') {
+          return res.status(400).json({
+            success: false,
+            message: 'Authors can only submit theses for review (change status from Draft to Under Review).'
+          });
+        }
       }
     }
 
-    // Only allow updates if thesis is in draft status (unless admin)
-    if (thesis.status !== 'Draft' && req.user.role !== 'admin' && !req.body.status) {
+    // Only allow content updates if thesis is in draft status (unless admin or adviser approving/rejecting)
+    if (thesis.status !== 'Draft' && !isAdmin && !isAdviserInDepartment && !req.body.status) {
       return res.status(400).json({
         success: false,
-        message: 'Cannot update thesis that is not in draft status'
+        message: 'Cannot update thesis content that is not in draft status'
       });
     }
 
@@ -1070,7 +1169,12 @@ router.put('/:id', protect, [
     if (req.body.category) updateData.category = req.body.category;
     if (req.body.adviserId) updateData.adviser_id = req.body.adviserId;
     if (req.body.status) updateData.status = req.body.status;
-    if (req.body.isPublic !== undefined) updateData.is_public = req.body.isPublic;
+    // Only admins can change isPublic or publish
+    if (req.body.isPublic !== undefined && isAdmin) {
+      updateData.is_public = req.body.isPublic;
+    }
+    // If adviser approves, don't automatically make it public (admin must publish)
+    // If adviser rejects, keep current is_public status
 
     // Update thesis
     await thesis.update(updateData);
