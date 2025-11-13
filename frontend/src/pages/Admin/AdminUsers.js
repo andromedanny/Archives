@@ -31,7 +31,6 @@ const AdminUsers = () => {
     password: '',
     role: 'student',
     department: '',
-    phone: '',
     isActive: true
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -92,7 +91,6 @@ const AdminUsers = () => {
       password: '', // Don't populate password when editing
       role: user.role,
       department: user.department,
-      phone: user.phone || '',
       isActive: user.isActive
     });
     setShowPassword(false);
@@ -109,7 +107,6 @@ const AdminUsers = () => {
       password: '',
       role: 'student',
       department: '',
-      phone: '',
       isActive: true
     });
     setShowPassword(false);
@@ -130,8 +127,9 @@ const AdminUsers = () => {
     // Combine: firstInitial + lastPart
     const emailLocal = `${firstInitial}${lastPart}`;
     
-    // For now, always use @gmail.com (can be extended based on role if needed)
-    return `${emailLocal}@gmail.com`;
+    // Suggest firstasia.edu.ph for students, gmail.com for others
+    const domain = role === 'student' ? 'firstasia.edu.ph' : 'gmail.com';
+    return `${emailLocal}@${domain}`;
   };
 
   // Handle input change with email auto-suggestion
@@ -211,7 +209,6 @@ const AdminUsers = () => {
         password: '',
         role: 'student',
         department: '',
-        phone: '',
         isActive: true
       });
       setShowPassword(false);
@@ -332,7 +329,6 @@ const AdminUsers = () => {
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Email</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Role</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Department</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Phone</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Join Date</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Status</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Actions</th>
@@ -363,9 +359,6 @@ const AdminUsers = () => {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600 border-b">{user.department}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600 border-b">
-                          {user.phone || '-'}
-                        </td>
                         <td className="px-4 py-3 text-sm text-gray-600 border-b">
                           {new Date(user.joinDate).toLocaleDateString()}
                         </td>
@@ -490,7 +483,6 @@ const AdminUsers = () => {
                     }}
                   >
                     <option value="student">Student</option>
-                    <option value="faculty">Faculty</option>
                     <option value="admin">Admin</option>
                     <option value="adviser">Adviser</option>
                   </select>
@@ -638,26 +630,6 @@ const AdminUsers = () => {
                   </select>
                 </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
-                    Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '6px',
-                      fontSize: '14px'
-                    }}
-                    placeholder="Enter phone number"
-                  />
-                </div>
-
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                   <input
                     type="checkbox"
@@ -784,7 +756,6 @@ const AdminUsers = () => {
                     }}
                   >
                     <option value="student">Student</option>
-                    <option value="faculty">Faculty</option>
                     <option value="admin">Admin</option>
                     <option value="adviser">Adviser</option>
                   </select>

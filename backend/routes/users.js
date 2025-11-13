@@ -168,7 +168,7 @@ router.post('/', protect, authorize('admin'), [
   body('lastName').trim().notEmpty().withMessage('Last name is required'),
   body('email').isEmail().withMessage('Please provide a valid email'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('role').isIn(['student', 'faculty', 'admin', 'adviser', 'prof']).withMessage('Invalid role'),
+  body('role').isIn(['student', 'admin', 'adviser']).withMessage('Invalid role'),
   body('department').trim().notEmpty().withMessage('Department is required'),
   body('studentId').optional().trim(),
   body('phone').optional().trim()
@@ -261,7 +261,7 @@ router.put('/:id', protect, [
   body('lastName').optional().trim().notEmpty().withMessage('Last name cannot be empty'),
   body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('phone').optional().matches(/^[\+]?[1-9][\d]{0,15}$/).withMessage('Invalid phone number'),
-  body('role').optional().isIn(['student', 'faculty', 'admin', 'adviser', 'prof']),
+  body('role').optional().isIn(['student', 'admin', 'adviser']),
   body('isActive').optional().isBoolean()
 ], async (req, res) => {
   try {
