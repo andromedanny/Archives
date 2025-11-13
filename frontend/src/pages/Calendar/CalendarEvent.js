@@ -5,32 +5,83 @@ import { Helmet } from 'react-helmet-async';
 import Header from '../../components/Layout/Header';
 import Footer from '../../components/Layout/Footer';
 import BackgroundImage from '../../components/UI/BackgroundImage';
+import { calendarAPI } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
+import toast from 'react-hot-toast';
+import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 const CalendarEvent = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [event, setEvent] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Mock data - replace with actual API call
-    const mockEvent = {
-      id: id,
-      title: "Thesis Defense - Web Development",
-      type: "defense",
-      date: "2023-06-20T10:00:00",
-      defenders: "Alice Johnson",
-      panelists: "Dr. Smith, Dr. Brown",
-      defenseType: "Thesis Defense",
-      notes: "Final defense presentation"
-    };
-    
-    setEvent(mockEvent);
-    setIsLoading(false);
+    fetchEvent();
   }, [id]);
+
+  const fetchEvent = async () => {
+    try {
+      setIsLoading(true);
+      const response = await calendarAPI.getEvent(id);
+      if (response.data.success) {
+        setEvent(response.data.data);
+      } else {
+        toast.error('Event not found');
+        navigate('/calendar');
+      }
+    } catch (error) {
+      console.error('Error fetching event:', error);
+      if (error.response?.status === 404) {
+        toast.error('Event not found');
+      } else {
+        toast.error('Failed to load event');
+      }
+      navigate('/calendar');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleBack = () => {
     navigate('/calendar');
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete "${event.title}"?`)) {
+      return;
+    }
+
+    try {
+      await calendarAPI.deleteEvent(id);
+      toast.success('Event deleted successfully');
+      navigate('/calendar');
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      toast.error(error.response?.data?.message || 'Failed to delete event');
+    }
+  };
+
+  // Check if user can edit/delete this event
+  const canEdit = user && (
+    user.role === 'admin' || 
+    (event && event.organizer && event.organizer.id === user.id)
+  );
+  const canManage = user && (user.role === 'faculty' || user.role === 'admin');
+
+  // Format date and time
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
   if (isLoading) {
@@ -74,30 +125,85 @@ const CalendarEvent = () => {
 
             {/* Event Header */}
             <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-800 mb-4">{event?.title}</h1>
-              <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                <span><strong>Type:</strong> {event?.type}</span>
-                <span><strong>Date:</strong> {new Date(event?.date).toLocaleString()}</span>
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <h1 className="text-3xl font-bold text-gray-800 mb-4">{event?.title}</h1>
+                  <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                    <span>
+                      <strong>Type:</strong> {event?.event_type ? event.event_type.replace('_', ' ') : 'N/A'}
+                    </span>
+                    <span>
+                      <strong>Date:</strong> {formatDateTime(event?.event_date)}
+                    </span>
+                    {event?.end_date && (
+                      <span>
+                        <strong>End:</strong> {formatDateTime(event?.end_date)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {canEdit && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => navigate(`/calendar/create?edit=${id}`)}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      <PencilIcon className="h-5 w-5" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      <TrashIcon className="h-5 w-5" />
+                      Delete
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Event Details */}
             <div className="space-y-6">
-              {event?.type === 'defense' && (
-                <>
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-800 mb-3">Defense Details</h2>
-                    <div className="space-y-3">
-                      <p><strong>Defense Type:</strong> {event?.defenseType}</p>
-                      <p><strong>Defenders:</strong> {event?.defenders}</p>
-                      <p><strong>Panelists:</strong> {event?.panelists}</p>
-                      {event?.notes && (
-                        <p><strong>Notes:</strong> {event?.notes}</p>
-                      )}
+              <div>
+                <h2 className="text-xl font-semibold text-gray-800 mb-3">Event Details</h2>
+                <div className="space-y-3">
+                  {event?.department && (
+                    <p>
+                      <strong>Department:</strong> {event.department}
+                    </p>
+                  )}
+                  {event?.location && (
+                    <p>
+                      <strong>Location:</strong> {event.location}
+                    </p>
+                  )}
+                  {event?.organizer && (
+                    <p>
+                      <strong>Organizer:</strong> {event.organizer.firstName} {event.organizer.lastName}
+                    </p>
+                  )}
+                  {event?.status && (
+                    <p>
+                      <strong>Status:</strong> 
+                      <span className={`ml-2 px-2 py-1 text-xs rounded ${
+                        event.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                        event.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        event.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                        'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {event.status}
+                      </span>
+                    </p>
+                  )}
+                  {event?.description && (
+                    <div>
+                      <strong>Description:</strong>
+                      <p className="mt-2 text-gray-700 whitespace-pre-wrap">{event.description}</p>
                     </div>
-                  </div>
-                </>
-              )}
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Action Buttons */}
@@ -107,6 +213,12 @@ const CalendarEvent = () => {
                 className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
               >
                 Print Event
+              </button>
+              <button
+                onClick={handleBack}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Back to Calendar
               </button>
             </div>
           </motion.div>

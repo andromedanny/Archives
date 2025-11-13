@@ -1,52 +1,21 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import Header from '../../components/Layout/Header';
 import Footer from '../../components/Layout/Footer';
 import BackgroundImage from '../../components/UI/BackgroundImage';
+import { calendarAPI } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
+import toast from 'react-hot-toast';
+import { 
+  PlusIcon, 
+  PencilIcon, 
+  TrashIcon,
+  EyeIcon
+} from '@heroicons/react/24/outline';
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-const MOCK_EVENTS = {
-  '2025-11-03': [
-    {
-      id: 'evt-101',
-      title: 'Thesis Defense: Smart Irrigation System',
-      department: 'College of Engineering',
-      time: '10:00 AM',
-      location: 'Room 402',
-      description: 'Final defense with panel.',
-    },
-  ],
-  '2025-11-10': [
-    {
-      id: 'evt-201',
-      title: 'Submission: AI-driven Fraud Detection',
-      department: 'College of Business and Accountancy',
-      time: 'All Day',
-      location: 'Registrar Office',
-      description: 'Final manuscript submission.',
-    },
-    {
-      id: 'evt-202',
-      title: 'Thesis Defense: Interactive VR Tour',
-      department: 'College of Computing',
-      time: '2:00 PM',
-      location: 'Innovation Lab',
-      description: 'Defense for VR project.',
-    },
-  ],
-  '2025-11-18': [
-    {
-      id: 'evt-301',
-      title: 'Proposal Review: Green Campus Initiative',
-      department: 'School of Graduate Studies',
-      time: '1:30 PM',
-      location: 'Conference Room B',
-      description: 'Proposal review with committee.',
-    },
-  ],
-};
 
 const getFirstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
 const getLastDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0);
@@ -70,18 +39,92 @@ const isSameDay = (a, b) =>
   a.getDate() === b.getDate();
 
 const Calendar = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const today = useMemo(() => new Date(), []);
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [monthInput, setMonthInput] = useState(() => new Date().getMonth() + 1);
   const [yearInput, setYearInput] = useState(() => new Date().getFullYear());
+  const [events, setEvents] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const calendarDays = useMemo(() => buildDaysForMonth(currentMonth), [currentMonth]);
+
+  // Check if user can manage events (faculty or admin)
+  const canManageEvents = user && (user.role === 'faculty' || user.role === 'admin');
+
+  // Fetch events for the current month
+  useEffect(() => {
+    fetchEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMonth]);
+
+  const fetchEvents = async () => {
+    try {
+      setIsLoading(true);
+      const startDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+      const endDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+      
+      const response = await calendarAPI.getEvents({
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString()
+      });
+
+      if (response.data.success) {
+        setEvents(response.data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching events:', error);
+      toast.error('Failed to load calendar events');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleMonthYearSubmit = (e) => {
     e.preventDefault();
     if (!yearInput || !monthInput) return;
     const newDate = new Date(yearInput, monthInput - 1, 1);
     setCurrentMonth(newDate);
+  };
+
+  const handleDelete = async (eventId, eventTitle) => {
+    if (!window.confirm(`Are you sure you want to delete "${eventTitle}"?`)) {
+      return;
+    }
+
+    try {
+      await calendarAPI.deleteEvent(eventId);
+      toast.success('Event deleted successfully');
+      fetchEvents();
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      toast.error(error.response?.data?.message || 'Failed to delete event');
+    }
+  };
+
+  // Group events by date
+  const eventsByDate = useMemo(() => {
+    const grouped = {};
+    events.forEach(event => {
+      const eventDate = new Date(event.event_date);
+      const dateKey = formatKey(eventDate);
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = [];
+      }
+      grouped[dateKey].push(event);
+    });
+    return grouped;
+  }, [events]);
+
+  // Format time from event date
+  const formatTime = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    });
   };
 
   return (
@@ -105,13 +148,22 @@ const Calendar = () => {
             transition={{ duration: 0.4 }}
             className="bg-white/95 backdrop-blur-sm p-8 rounded-3xl shadow-xl border border-white/60"
           >
-            <div className="text-center mb-6">
+            <div className="flex justify-between items-center mb-6">
               <h1 className="text-3xl font-bold text-gray-800">
                 {currentMonth.toLocaleDateString('en-US', {
                   month: 'long',
                   year: 'numeric',
                 })}
               </h1>
+              {canManageEvents && (
+                <button
+                  onClick={() => navigate('/calendar/create')}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <PlusIcon className="h-5 w-5" />
+                  Add Event
+                </button>
+              )}
             </div>
 
             <form
@@ -158,73 +210,133 @@ const Calendar = () => {
               </button>
             </form>
 
-            <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-200 bg-white">
-              {calendarDays.map(({ date, dayNumber, dayName }) => {
-                const isTodayFlag = isSameDay(date, today);
-                const eventsForDay = MOCK_EVENTS[formatKey(date)] || [];
-                if (eventsForDay.length === 0) {
-                  return null;
-                }
-
-                return (
-                  <div
-                    key={date.toISOString()}
-                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-3 bg-white"
-                    style={{ boxShadow: '0 1px 0 rgba(0,0,0,0.05)' }}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div
-                        className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center border ${
-                          isTodayFlag
-                            ? 'border-blue-500 text-blue-600 bg-blue-50'
-                            : 'border-gray-300 text-gray-700 bg-gray-50'
-                        }`}
-                      >
-                        <span className="text-[10px] uppercase tracking-wide font-semibold">{dayName}</span>
-                        <span className="text-lg font-bold">{dayNumber}</span>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">
-                          {date.toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                          })}
-                        </p>
-                        {eventsForDay.length === 0 ? (
-                          <p className="text-xs text-gray-400">No events scheduled.</p>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="text-sm text-gray-500">
-                        {eventsForDay.length === 0
-                          ? 'Departments can populate thesis events for this date.'
-                          : `${eventsForDay.length} event${eventsForDay.length > 1 ? 's' : ''}`}
-                  </div>
-                    {eventsForDay.length > 0 && (
-                      <div className="px-10 pb-4">
-                        <div className="space-y-3">
-                          {eventsForDay.map((event) => (
-                            <div
-                              key={event.id}
-                              className="rounded-xl border border-gray-200 bg-white shadow-sm px-4 py-3"
-                            >
-                              <h3 className="text-sm font-semibold text-gray-800">{event.title}</h3>
-                              <p className="text-xs text-gray-500">{event.department}</p>
-                              <p className="text-xs text-gray-500">Time: {event.time}</p>
-                              <p className="text-xs text-gray-500">Location: {event.location}</p>
-                              {event.description && (
-                                <p className="text-xs text-gray-500 mt-1">{event.description}</p>
-                              )}
-                  </div>
-                ))}
+            {isLoading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-4 text-gray-600">Loading events...</p>
               </div>
-            </div>
-                        )}
+            ) : (
+              <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-200 bg-white">
+                {calendarDays.map(({ date, dayNumber, dayName }) => {
+                  const isTodayFlag = isSameDay(date, today);
+                  const dateKey = formatKey(date);
+                  const eventsForDay = eventsByDate[dateKey] || [];
+
+                  if (eventsForDay.length === 0) {
+                    return null;
+                  }
+
+                  return (
+                    <div
+                      key={date.toISOString()}
+                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-3 bg-white"
+                      style={{ boxShadow: '0 1px 0 rgba(0,0,0,0.05)' }}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div
+                          className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center border ${
+                            isTodayFlag
+                              ? 'border-blue-500 text-blue-600 bg-blue-50'
+                              : 'border-gray-300 text-gray-700 bg-gray-50'
+                          }`}
+                        >
+                          <span className="text-[10px] uppercase tracking-wide font-semibold">{dayName}</span>
+                          <span className="text-lg font-bold">{dayNumber}</span>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">
+                            {date.toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                            })}
+                          </p>
+                        </div>
                       </div>
-                );
-              })}
-            </div>
+                      <div className="text-sm text-gray-500">
+                        {`${eventsForDay.length} event${eventsForDay.length > 1 ? 's' : ''}`}
+                      </div>
+                      {eventsForDay.length > 0 && (
+                        <div className="w-full px-10 pb-4">
+                          <div className="space-y-3">
+                            {eventsForDay.map((event) => {
+                              const canEdit = canManageEvents && (
+                                user.role === 'admin' || 
+                                (event.organizer && event.organizer.id === user.id)
+                              );
+                              
+                              return (
+                                <div
+                                  key={event.id}
+                                  className="rounded-xl border border-gray-200 bg-white shadow-sm px-4 py-3"
+                                >
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                      <h3 className="text-sm font-semibold text-gray-800">{event.title}</h3>
+                                      <p className="text-xs text-gray-500 mt-1">{event.department || 'N/A'}</p>
+                                      <p className="text-xs text-gray-500">Time: {formatTime(event.event_date)}</p>
+                                      {event.location && (
+                                        <p className="text-xs text-gray-500">Location: {event.location}</p>
+                                      )}
+                                      {event.description && (
+                                        <p className="text-xs text-gray-500 mt-1">{event.description}</p>
+                                      )}
+                                      {event.event_type && (
+                                        <span className="inline-block mt-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                                          {event.event_type.replace('_', ' ')}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {canEdit && (
+                                      <div className="flex gap-2 ml-4">
+                                        <button
+                                          onClick={() => navigate(`/calendar/event/${event.id}`)}
+                                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                          title="View Event"
+                                        >
+                                          <EyeIcon className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          onClick={() => navigate(`/calendar/create?edit=${event.id}`)}
+                                          className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
+                                          title="Edit Event"
+                                        >
+                                          <PencilIcon className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(event.id, event.title)}
+                                          className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                          title="Delete Event"
+                                        >
+                                          <TrashIcon className="h-4 w-4" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {Object.keys(eventsByDate).length === 0 && (
+                  <div className="text-center py-12 text-gray-500">
+                    <p>No events scheduled for this month.</p>
+                    {canManageEvents && (
+                      <button
+                        onClick={() => navigate('/calendar/create')}
+                        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Add First Event
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </motion.div>
         </div>
       </main>

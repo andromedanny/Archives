@@ -60,7 +60,7 @@ router.get('/', protect, [
         { firstName: { [Op.like]: `%${req.query.search}%` } },
         { lastName: { [Op.like]: `%${req.query.search}%` } },
         { email: { [Op.like]: `%${req.query.search}%` } },
-        { studentId: { [Op.like]: `%${req.query.search}%` } }
+        { student_id: { [Op.like]: `%${req.query.search}%` } }
       ];
     }
 
@@ -168,7 +168,7 @@ router.post('/', protect, authorize('admin'), [
       password: req.body.password,
       role: req.body.role,
       department: req.body.department,
-      studentId: req.body.studentId || null,
+      student_id: req.body.studentId || null,
       phone: req.body.phone || null,
       isActive: true
     });
@@ -234,7 +234,7 @@ router.put('/:id', protect, [
     if (req.body.lastName) updateData.lastName = req.body.lastName;
     if (req.body.phone) updateData.phone = req.body.phone;
     if (req.body.department) updateData.department = req.body.department;
-    if (req.body.studentId) updateData.studentId = req.body.studentId;
+    if (req.body.studentId) updateData.student_id = req.body.studentId;
     
     // Password update - only update if provided (for admin password reset)
     if (req.body.password && req.body.password.trim() !== '') {
@@ -576,7 +576,7 @@ router.get('/department/:department', protect, async (req, res) => {
 
     const users = await User.findAll({
       where,
-      attributes: ['id', 'firstName', 'lastName', 'email', 'role', 'studentId'],
+      attributes: ['id', 'firstName', 'lastName', 'email', 'role', 'student_id'],
       order: [['role', 'ASC'], ['firstName', 'ASC']]
     });
 

@@ -45,6 +45,7 @@ const limiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  trustProxy: 1, // Trust only the first proxy (Railway) - more secure than true
   skip: (req) => {
     // Skip rate limiting for health endpoint (already handled above, but keep as safety)
     const path = req.path || req.originalUrl || '';
