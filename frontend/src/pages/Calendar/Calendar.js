@@ -1,7 +1,15 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin from '@fullcalendar/interaction';
+// FullCalendar CSS - v6 bundles CSS differently
+import '@fullcalendar/core/v4.css';
+import '@fullcalendar/daygrid/v4.css';
+import '@fullcalendar/timegrid/v4.css';
 import Header from '../../components/Layout/Header';
 import Footer from '../../components/Layout/Footer';
 import BackgroundImage from '../../components/UI/BackgroundImage';
@@ -15,79 +23,89 @@ import {
   EyeIcon
 } from '@heroicons/react/24/outline';
 
-const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-const getFirstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
-const getLastDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0);
-
-const buildDaysForMonth = (currentMonth) => {
-  const totalDays = getLastDayOfMonth(currentMonth).getDate();
-  return Array.from({ length: totalDays }, (_, idx) => {
-    const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), idx + 1);
-    return {
-      date,
-      dayNumber: idx + 1,
-      dayName: DAYS_OF_WEEK[date.getDay()],
-    };
-  });
-};
-
-const formatKey = (date) => date.toISOString().split('T')[0];
-const isSameDay = (a, b) =>
-  a.getFullYear() === b.getFullYear() &&
-  a.getMonth() === b.getMonth() &&
-  a.getDate() === b.getDate();
-
 const Calendar = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const today = useMemo(() => new Date(), []);
-  const [currentMonth, setCurrentMonth] = useState(() => new Date());
-  const [monthInput, setMonthInput] = useState(() => new Date().getMonth() + 1);
-  const [yearInput, setYearInput] = useState(() => new Date().getFullYear());
-  const [events, setEvents] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const calendarRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const calendarDays = useMemo(() => buildDaysForMonth(currentMonth), [currentMonth]);
+  // Check if user can manage events (faculty, admin, or adviser)
+  const canManageEvents = user && (user.role === 'faculty' || user.role === 'admin' || user.role === 'adviser');
 
-  // Check if user can manage events (faculty or admin)
-  const canManageEvents = user && (user.role === 'faculty' || user.role === 'admin');
+  // Transform API events to FullCalendar format
+  const transformEvents = (apiEvents) => {
+    return apiEvents.map(event => ({
+      id: String(event.id),
+      title: event.title,
+      start: event.event_date,
+      end: event.end_date || null,
+      allDay: !event.event_date.includes('T') || event.event_date.split('T')[1] === '00:00:00',
+      backgroundColor: getEventColor(event.event_type),
+      borderColor: getEventColor(event.event_type),
+      textColor: '#ffffff',
+      extendedProps: {
+        department: event.department,
+        event_type: event.event_type,
+        location: event.location,
+        description: event.description,
+        organizer: event.organizer,
+        originalEvent: event
+      }
+    }));
+  };
 
-  // Fetch events for the current month
-  useEffect(() => {
-    fetchEvents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMonth]);
+  // Get color based on event type
+  const getEventColor = (eventType) => {
+    const colors = {
+      thesis_defense: '#dc2626',      // red
+      title_defense: '#ea580c',       // orange
+      thesis_submission: '#2563eb',   // blue
+      meeting: '#059669',             // green
+      deadline: '#7c3aed',            // purple
+      other: '#6b7280'                // gray
+    };
+    return colors[eventType] || colors.other;
+  };
 
-  const fetchEvents = async () => {
+  // Fetch events function for FullCalendar
+  const fetchEvents = async (info, successCallback, failureCallback) => {
     try {
       setIsLoading(true);
-      const startDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-      const endDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
-      
       const response = await calendarAPI.getEvents({
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString()
+        startDate: info.start.toISOString(),
+        endDate: info.end.toISOString()
       });
 
       if (response.data.success) {
-        setEvents(response.data.data || []);
+        const transformedEvents = transformEvents(response.data.data || []);
+        successCallback(transformedEvents);
+      } else {
+        successCallback([]);
       }
     } catch (error) {
       console.error('Error fetching events:', error);
       toast.error('Failed to load calendar events');
+      failureCallback(error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleMonthYearSubmit = (e) => {
-    e.preventDefault();
-    if (!yearInput || !monthInput) return;
-    const newDate = new Date(yearInput, monthInput - 1, 1);
-    setCurrentMonth(newDate);
+  // Handle event click
+  const handleEventClick = (clickInfo) => {
+    const originalEvent = clickInfo.event.extendedProps.originalEvent;
+    navigate(`/calendar/event/${originalEvent.id}`);
   };
 
+  // Handle date click (to create new event)
+  const handleDateClick = (dateClickInfo) => {
+    if (canManageEvents) {
+      const dateStr = dateClickInfo.dateStr;
+      navigate(`/calendar/create?date=${dateStr}`);
+    }
+  };
+
+  // Handle delete event
   const handleDelete = async (eventId, eventTitle) => {
     if (!window.confirm(`Are you sure you want to delete "${eventTitle}"?`)) {
       return;
@@ -96,42 +114,22 @@ const Calendar = () => {
     try {
       await calendarAPI.deleteEvent(eventId);
       toast.success('Event deleted successfully');
-      fetchEvents();
+      // Refresh calendar
+      if (calendarRef.current) {
+        const calendarApi = calendarRef.current.getApi();
+        calendarApi.refetchEvents();
+      }
     } catch (error) {
       console.error('Error deleting event:', error);
       toast.error(error.response?.data?.message || 'Failed to delete event');
     }
   };
 
-  // Group events by date
-  const eventsByDate = useMemo(() => {
-    const grouped = {};
-    events.forEach(event => {
-      const eventDate = new Date(event.event_date);
-      const dateKey = formatKey(eventDate);
-      if (!grouped[dateKey]) {
-        grouped[dateKey] = [];
-      }
-      grouped[dateKey].push(event);
-    });
-    return grouped;
-  }, [events]);
-
-  // Format time from event date
-  const formatTime = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: '2-digit',
-      hour12: true 
-    });
-  };
-
   return (
     <>
       <Helmet>
         <title>Calendar - FAITH Colleges Thesis Archive</title>
-        <meta name="description" content="View the academic calendar." />
+        <meta name="description" content="View the academic calendar and thesis defense schedules." />
       </Helmet>
       
       <BackgroundImage />
@@ -141,7 +139,7 @@ const Calendar = () => {
         className="min-h-screen pt-16 pb-20"
         style={{ position: 'relative', zIndex: 1 }}
       >
-        <div className="w-11/12 max-w-4xl mx-auto mt-8">
+        <div className="w-11/12 max-w-7xl mx-auto mt-8">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -149,12 +147,7 @@ const Calendar = () => {
             className="bg-white/95 backdrop-blur-sm p-8 rounded-3xl shadow-xl border border-white/60"
           >
             <div className="flex justify-between items-center mb-6">
-              <h1 className="text-3xl font-bold text-gray-800">
-                {currentMonth.toLocaleDateString('en-US', {
-                  month: 'long',
-                  year: 'numeric',
-                })}
-              </h1>
+              <h1 className="text-3xl font-bold text-gray-800">Academic Calendar</h1>
               {canManageEvents && (
                 <button
                   onClick={() => navigate('/calendar/create')}
@@ -166,177 +159,95 @@ const Calendar = () => {
               )}
             </div>
 
-            <form
-              onSubmit={handleMonthYearSubmit}
-              className="flex flex-wrap items-center gap-3 mb-6 bg-gray-50 rounded-2xl px-4 py-3"
-            >
-              <div className="flex items-center gap-2">
-                <label htmlFor="month" className="text-sm font-medium text-gray-600">
-                  Month
-              </label>
-              <select
-                  id="month"
-                  value={monthInput}
-                  onChange={(e) => setMonthInput(Number(e.target.value))}
-                  className="px-3 py-1.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  {Array.from({ length: 12 }).map((_, index) => (
-                    <option key={index} value={index + 1}>
-                      {new Date(0, index).toLocaleDateString('en-US', { month: 'long' })}
-                    </option>
-                ))}
-              </select>
-            </div>
-              <div className="flex items-center gap-2">
-                <label htmlFor="year" className="text-sm font-medium text-gray-600">
-                  Year
-                </label>
-                <input
-                  id="year"
-                  type="number"
-                  value={yearInput}
-                  onChange={(e) => setYearInput(Number(e.target.value))}
-                  className="w-24 px-3 py-1.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  min={1900}
-                  max={2100}
-                  required
-                />
+            {isLoading && (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-2 text-sm text-gray-600">Loading events...</p>
               </div>
-              <button
-                type="submit"
-                className="ml-auto px-5 py-2 rounded-xl bg-blue-500 text-white font-semibold shadow hover:bg-blue-600 transition"
-              >
-                Go
-              </button>
-            </form>
+            )}
 
-            {isLoading ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-4 text-gray-600">Loading events...</p>
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-200 bg-white">
-                {calendarDays.map(({ date, dayNumber, dayName }) => {
-                  const isTodayFlag = isSameDay(date, today);
-                  const dateKey = formatKey(date);
-                  const eventsForDay = eventsByDate[dateKey] || [];
-
-                  if (eventsForDay.length === 0) {
-                    return null;
-                  }
-
+            <div className="calendar-container">
+              <FullCalendar
+                ref={calendarRef}
+                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                initialView="dayGridMonth"
+                headerToolbar={{
+                  left: 'prev,next today',
+                  center: 'title',
+                  right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                }}
+                events={fetchEvents}
+                eventClick={handleEventClick}
+                dateClick={handleDateClick}
+                editable={false}
+                selectable={canManageEvents}
+                selectMirror={true}
+                dayMaxEvents={true}
+                weekends={true}
+                height="auto"
+                eventDisplay="block"
+                eventTimeFormat={{
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  meridiem: 'short'
+                }}
+                slotMinTime="06:00:00"
+                slotMaxTime="22:00:00"
+                allDaySlot={true}
+                eventContent={(eventInfo) => {
+                  const event = eventInfo.event;
                   return (
-                    <div
-                      key={date.toISOString()}
-                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-3 bg-white"
-                      style={{ boxShadow: '0 1px 0 rgba(0,0,0,0.05)' }}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div
-                          className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center border ${
-                            isTodayFlag
-                              ? 'border-blue-500 text-blue-600 bg-blue-50'
-                              : 'border-gray-300 text-gray-700 bg-gray-50'
-                          }`}
-                        >
-                          <span className="text-[10px] uppercase tracking-wide font-semibold">{dayName}</span>
-                          <span className="text-lg font-bold">{dayNumber}</span>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">
-                            {date.toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric',
-                            })}
-                          </p>
+                    <div className="fc-event-main-frame">
+                      <div className="fc-event-time">{eventInfo.timeText}</div>
+                      <div className="fc-event-title-container">
+                        <div className="fc-event-title fc-sticky">
+                          {event.title}
                         </div>
                       </div>
-                      <div className="text-sm text-gray-500">
-                        {`${eventsForDay.length} event${eventsForDay.length > 1 ? 's' : ''}`}
-                      </div>
-                      {eventsForDay.length > 0 && (
-                        <div className="w-full px-10 pb-4">
-                          <div className="space-y-3">
-                            {eventsForDay.map((event) => {
-                              const canEdit = canManageEvents && (
-                                user.role === 'admin' || 
-                                (event.organizer && event.organizer.id === user.id)
-                              );
-                              
-                              return (
-                                <div
-                                  key={event.id}
-                                  className="rounded-xl border border-gray-200 bg-white shadow-sm px-4 py-3"
-                                >
-                                  <div className="flex justify-between items-start">
-                                    <div className="flex-1">
-                                      <h3 className="text-sm font-semibold text-gray-800">{event.title}</h3>
-                                      <p className="text-xs text-gray-500 mt-1">{event.department || 'N/A'}</p>
-                                      <p className="text-xs text-gray-500">Time: {formatTime(event.event_date)}</p>
-                                      {event.location && (
-                                        <p className="text-xs text-gray-500">Location: {event.location}</p>
-                                      )}
-                                      {event.description && (
-                                        <p className="text-xs text-gray-500 mt-1">{event.description}</p>
-                                      )}
-                                      {event.event_type && (
-                                        <span className="inline-block mt-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
-                                          {event.event_type.replace('_', ' ')}
-                                        </span>
-                                      )}
-                                    </div>
-                                    {canEdit && (
-                                      <div className="flex gap-2 ml-4">
-                                        <button
-                                          onClick={() => navigate(`/calendar/event/${event.id}`)}
-                                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                          title="View Event"
-                                        >
-                                          <EyeIcon className="h-4 w-4" />
-                                        </button>
-                                        <button
-                                          onClick={() => navigate(`/calendar/create?edit=${event.id}`)}
-                                          className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
-                                          title="Edit Event"
-                                        >
-                                          <PencilIcon className="h-4 w-4" />
-                                        </button>
-                                        <button
-                                          onClick={() => handleDelete(event.id, event.title)}
-                                          className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
-                                          title="Delete Event"
-                                        >
-                                          <TrashIcon className="h-4 w-4" />
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                      {event.extendedProps.location && (
+                        <div className="fc-event-location text-xs opacity-75">
+                          📍 {event.extendedProps.location}
                         </div>
                       )}
                     </div>
                   );
-                })}
-                {Object.keys(eventsByDate).length === 0 && (
-                  <div className="text-center py-12 text-gray-500">
-                    <p>No events scheduled for this month.</p>
-                    {canManageEvents && (
-                      <button
-                        onClick={() => navigate('/calendar/create')}
-                        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                      >
-                        Add First Event
-                      </button>
-                    )}
-                  </div>
-                )}
+                }}
+                eventDidMount={(info) => {
+                  // Add tooltip on hover
+                  info.el.setAttribute('title', 
+                    `${info.event.title}\n${info.event.extendedProps.location || 'No location'}\n${info.event.extendedProps.department || ''}`
+                  );
+                }}
+              />
+            </div>
+
+            {/* Event Type Legend */}
+            <div className="mt-6 flex flex-wrap gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#dc2626' }}></div>
+                <span>Thesis Defense</span>
               </div>
-            )}
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#ea580c' }}></div>
+                <span>Title Defense</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#2563eb' }}></div>
+                <span>Thesis Submission</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#059669' }}></div>
+                <span>Meeting</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#7c3aed' }}></div>
+                <span>Deadline</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#6b7280' }}></div>
+                <span>Other</span>
+              </div>
+            </div>
           </motion.div>
         </div>
       </main>
