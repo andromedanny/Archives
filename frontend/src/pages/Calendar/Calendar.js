@@ -83,7 +83,7 @@ const Calendar = () => {
     } catch (error) {
       console.error('Error fetching events:', error);
       // Only show error if it's not a 401 (unauthorized) - user might not be logged in
-      if (error.response?.status !== 401) {
+      if (error.response?.status !== 401 && error.response?.status !== 403) {
         // Use a single toast that won't spam
         const errorMessage = error.response?.data?.message || 'Failed to load calendar events';
         // Only show toast if we haven't shown it recently (prevent spam)
@@ -98,7 +98,10 @@ const Calendar = () => {
       // Return empty array instead of calling failureCallback to prevent infinite retries
       successCallback([]);
     } finally {
-      setIsLoading(false);
+      // Always hide loading indicator - use a small timeout to ensure state updates properly
+      setTimeout(() => {
+        setIsLoading(false);
+      }, 100);
     }
   };
 
@@ -170,13 +173,6 @@ const Calendar = () => {
               )}
             </div>
 
-            {isLoading && (
-              <div className="text-center py-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-2 text-sm text-gray-600">Loading events...</p>
-              </div>
-            )}
-
             <div className="calendar-container" style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '0.5rem' }}>
               <style>{`
                 .fc {
@@ -205,6 +201,7 @@ const Calendar = () => {
                   right: 'dayGridMonth,timeGridWeek,timeGridDay'
                 }}
                 events={fetchEvents}
+                loading={isLoading}
                 eventClick={handleEventClick}
                 dateClick={handleDateClick}
                 editable={false}
