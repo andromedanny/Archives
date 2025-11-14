@@ -4,7 +4,7 @@ import { Helmet } from 'react-helmet-async';
 import Header from '../../components/Layout/Header';
 import Footer from '../../components/Layout/Footer';
 import BackgroundImage from '../../components/UI/BackgroundImage';
-import { thesisAPI, departmentsAPI, coursesAPI, adminAPI } from '../../services/api';
+import { thesisAPI, departmentsAPI, coursesAPI, adminAPI, usersAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 import { formatCourseCode, formatAcademicYear } from '../../utils/formatters';
 import { 
@@ -216,6 +216,47 @@ const AdminTheses = () => {
         setShowEditModal(false);
         fetchTheses();
       } else {
+        // Parse authors string and find user IDs
+        let authorIds = [];
+        if (formData.authors && formData.authors.trim()) {
+          try {
+            const authorNames = formData.authors.split(',').map(name => name.trim()).filter(Boolean);
+            const allUsersResponse = await usersAPI.getUsers({ limit: 1000 });
+            const allUsers = allUsersResponse.data?.data || [];
+            
+            for (const authorName of authorNames) {
+              // Try to find user by full name (firstName + lastName)
+              const nameParts = authorName.split(' ').filter(Boolean);
+              let foundUser = null;
+              
+              if (nameParts.length >= 2) {
+                // Try to match first name + last name
+                const firstName = nameParts[0];
+                const lastName = nameParts.slice(1).join(' ');
+                foundUser = allUsers.find(u => 
+                  u.firstName?.toLowerCase() === firstName.toLowerCase() &&
+                  u.lastName?.toLowerCase() === lastName.toLowerCase()
+                );
+              }
+              
+              // If not found, try partial match
+              if (!foundUser) {
+                foundUser = allUsers.find(u => {
+                  const fullName = `${u.firstName || ''} ${u.lastName || ''}`.trim().toLowerCase();
+                  return fullName.includes(authorName.toLowerCase()) || authorName.toLowerCase().includes(fullName);
+                });
+              }
+              
+              if (foundUser && !authorIds.includes(foundUser.id)) {
+                authorIds.push(foundUser.id);
+              }
+            }
+          } catch (error) {
+            console.error('Error searching for authors:', error);
+            toast.error('Warning: Could not find all authors in system. Thesis will be created without authors.');
+          }
+        }
+
         const createPayload = {
           title: formData.title.trim(),
           abstract: formData.abstract.trim(),
@@ -224,7 +265,8 @@ const AdminTheses = () => {
           academicYear: formData.academicYear,
           semester: formData.semester,
           category: formData.category,
-          keywords: []
+          keywords: [],
+          ...(authorIds.length > 0 && { coAuthorIds: authorIds })
         };
 
         const response = await thesisAPI.createThesis(createPayload);
@@ -804,9 +846,6 @@ const AdminTheses = () => {
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-gray-500">
-                      Maximum file size: 10MB. PDF format only.
-                    </p>
                   </div>
                 )}
 

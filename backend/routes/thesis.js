@@ -982,16 +982,20 @@ router.post('/', protect, [
     
     const thesis = await Thesis.create(thesisData);
 
-    // Add current user as author using Sequelize association method
+    // Add authors - use coAuthorIds if provided (for admin-created theses), otherwise use current user
+    const authorIds = req.body.coAuthorIds && Array.isArray(req.body.coAuthorIds) && req.body.coAuthorIds.length > 0
+      ? req.body.coAuthorIds
+      : [req.user.id];
+
     try {
       // Use the Sequelize belongsToMany association method
-      await thesis.setAuthors([req.user.id]);
+      await thesis.setAuthors(authorIds);
       
       // Verify the relationship was created
       const authorCount = await ThesisAuthors.count({
         where: {
           thesis_id: thesis.id,
-          user_id: req.user.id
+          user_id: { [Op.in]: authorIds }
         }
       });
       console.log('Author relationship verified - count:', authorCount);
@@ -1001,16 +1005,18 @@ router.post('/', protect, [
       
       // Try alternative method if setAuthors fails
       try {
-        await ThesisAuthors.findOrCreate({
-          where: {
-            thesis_id: thesis.id,
-            user_id: req.user.id
-          },
-          defaults: {
-            thesis_id: thesis.id,
-            user_id: req.user.id
-          }
-        });
+        for (const userId of authorIds) {
+          await ThesisAuthors.findOrCreate({
+            where: {
+              thesis_id: thesis.id,
+              user_id: userId
+            },
+            defaults: {
+              thesis_id: thesis.id,
+              user_id: userId
+            }
+          });
+        }
       } catch (fallbackError) {
         // Don't fail the whole request, but log the error silently
       }
