@@ -1131,20 +1131,36 @@ router.put('/:id', protect, [
 
     // Status update permissions
     if (req.body.status) {
-      // Only admins can publish theses
-      if (req.body.status === 'Published' && !isAdmin) {
-        return res.status(403).json({
-          success: false,
-          message: 'Only administrators can publish theses. Advisers can approve or reject.'
-        });
+      // Only admins can publish theses, and only if they are Approved
+      if (req.body.status === 'Published') {
+        if (!isAdmin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Only administrators can publish theses. Advisers can approve or reject.'
+          });
+        }
+        // Admins can only publish theses that are Approved (not Rejected)
+        if (thesis.status !== 'Approved') {
+          return res.status(400).json({
+            success: false,
+            message: 'Only approved theses can be published. Rejected theses cannot be published.'
+          });
+        }
       }
       
-      // Advisers can only approve or reject theses in their department
+      // Advisers can only approve or reject theses in their department (from Under Review status)
       if (isAdviserInDepartment && !isAdmin) {
         if (req.body.status !== 'Approved' && req.body.status !== 'Rejected') {
           return res.status(403).json({
             success: false,
             message: 'Advisers can only approve or reject theses. Only administrators can publish.'
+          });
+        }
+        // Advisers can only approve/reject theses that are Under Review
+        if (thesis.status !== 'Under Review') {
+          return res.status(400).json({
+            success: false,
+            message: 'Advisers can only approve or reject theses that are under review.'
           });
         }
       }

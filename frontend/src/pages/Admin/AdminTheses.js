@@ -324,25 +324,17 @@ const AdminTheses = () => {
     }
   };
 
-  const handleApprove = async (thesisId) => {
+  const handlePublish = async (thesisId) => {
+    if (!window.confirm('Are you sure you want to publish this thesis? It will be made publicly available.')) {
+      return;
+    }
     try {
       await thesisAPI.updateThesis(thesisId, { status: 'Published', isPublic: true });
-      toast.success('Thesis approved and published');
+      toast.success('Thesis published successfully');
       fetchTheses();
     } catch (error) {
-      console.error('Error approving thesis:', error);
-      toast.error(error.response?.data?.message || 'Failed to approve thesis');
-    }
-  };
-
-  const handleReject = async (thesisId) => {
-    try {
-      await thesisAPI.updateThesis(thesisId, { status: 'Rejected' });
-      toast.success('Thesis rejected');
-      fetchTheses();
-    } catch (error) {
-      console.error('Error rejecting thesis:', error);
-      toast.error(error.response?.data?.message || 'Failed to reject thesis');
+      console.error('Error publishing thesis:', error);
+      toast.error(error.response?.data?.message || 'Failed to publish thesis');
     }
   };
 
@@ -581,10 +573,12 @@ const AdminTheses = () => {
                             <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
                               thesisStatus === 'published'
                                 ? 'bg-green-100 text-green-800'
+                                : thesisStatus === 'approved'
+                                ? 'bg-blue-100 text-blue-800'
                                 : thesisStatus === 'under_review'
                                 ? 'bg-yellow-100 text-yellow-800'
                                 : thesisStatus === 'draft'
-                                ? 'bg-blue-100 text-blue-800'
+                                ? 'bg-gray-100 text-gray-800'
                                 : 'bg-red-100 text-red-800'
                             }`}>
                               {(thesis.status || '').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
@@ -612,23 +606,15 @@ const AdminTheses = () => {
                                 <PencilIcon className="h-4 w-4" />
                                 Edit
                               </button>
-                              {thesisStatus === 'under_review' && (
-                                <>
-                                  <button
-                                    onClick={() => handleApprove(thesis.id)}
-                                    className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                                  >
-                                    <CheckIcon className="h-4 w-4" />
-                                    Approve
-                                  </button>
-                                  <button
-                                    onClick={() => handleReject(thesis.id)}
-                                    className="flex items-center gap-1 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                                  >
-                                    <XMarkIcon className="h-4 w-4" />
-                                    Reject
-                                  </button>
-                                </>
+                              {thesisStatus === 'approved' && (
+                                <button
+                                  onClick={() => handlePublish(thesis.id)}
+                                  className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                                  title="Publish this approved thesis"
+                                >
+                                  <CheckIcon className="h-4 w-4" />
+                                  Publish
+                                </button>
                               )}
                               <button
                                 onClick={() => handleDelete(thesis.id)}
