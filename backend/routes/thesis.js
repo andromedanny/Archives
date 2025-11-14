@@ -47,8 +47,12 @@ router.get('/', [
     if (req.user && req.user.department) {
       // If user is logged in and has a department:
       if (req.user.role === 'adviser') {
-        // Advisers see ALL theses from their department (regardless of status or is_public)
-        conditions.push({ department: req.user.department });
+        // Advisers see ONLY APPROVED theses from their department when viewing public thesis list
+        // (Note: /adviser/theses endpoint shows all statuses for management purposes)
+        conditions.push({ 
+          department: req.user.department,
+          status: 'Approved'
+        });
       } else {
         // Other users see:
         // 1. All published public theses (from any department)
