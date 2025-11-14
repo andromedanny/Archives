@@ -26,8 +26,8 @@ const Calendar = () => {
   const calendarRef = useRef(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Check if user can manage events (faculty, admin, or adviser)
-  const canManageEvents = user && (user.role === 'faculty' || user.role === 'admin' || user.role === 'adviser');
+  // Check if user can manage events (faculty or admin only - advisers can view but not create)
+  const canManageEvents = user && (user.role === 'faculty' || user.role === 'admin');
 
   // Transform API events to FullCalendar format
   const transformEvents = (apiEvents) => {
