@@ -138,6 +138,9 @@ const Dashboard = () => {
           link: '/admin/thesis?filter=recent'
         }
       ];
+    } else if (currentUser?.role === 'adviser') {
+      // Advisers don't need these stats
+      return [];
     } else {
       return [
         {
@@ -430,14 +433,15 @@ const Dashboard = () => {
             </div>
           </motion.div>
 
-          {/* Statistics Cards */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
-          >
-            {getRoleBasedStats().map((stat, index) => (
+          {/* Statistics Cards - Hidden for advisers */}
+          {getRoleBasedStats().length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+            >
+              {getRoleBasedStats().map((stat, index) => (
               <motion.div
                 key={stat.title}
                 initial={{ opacity: 0, y: 20 }}
@@ -462,7 +466,8 @@ const Dashboard = () => {
                 </div>
               </motion.div>
             ))}
-          </motion.div>
+            </motion.div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {/* Quick Actions */}
@@ -542,50 +547,52 @@ const Dashboard = () => {
               </div>
             </motion.div>
 
-            {/* My Theses */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-            >
-              <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 h-full">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                    <div className="w-1 h-6 bg-gradient-to-b from-green-600 to-green-400 rounded-full"></div>
-                    My Theses
-                  </h2>
-                  <button
-                    onClick={() => navigate('/my-theses')}
-                    className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    View All
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {dashboardData.myTheses && dashboardData.myTheses.slice(0, 5).map((thesis, index) => (
-                    <motion.div
-                      key={thesis.id}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.3, delay: 0.4 + (index * 0.1) }}
-                      className="p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300 cursor-pointer"
-                      onClick={() => navigate(`/thesis/${thesis.id}`)}
+            {/* My Theses - Hidden for advisers */}
+            {currentUser?.role !== 'adviser' && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.4 }}
+              >
+                <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 h-full">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                      <div className="w-1 h-6 bg-gradient-to-b from-green-600 to-green-400 rounded-full"></div>
+                      My Theses
+                    </h2>
+                    <button
+                      onClick={() => navigate('/my-theses')}
+                      className="text-xs text-blue-600 hover:text-blue-700 font-medium"
                     >
-                      <p className="text-sm font-medium text-gray-800 mb-1 line-clamp-2">{thesis.title}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium bg-${thesis.status === 'Published' ? 'green' : thesis.status === 'Under Review' ? 'yellow' : 'gray'}-100 text-${thesis.status === 'Published' ? 'green' : thesis.status === 'Under Review' ? 'yellow' : 'gray'}-800`}>
-                          {thesis.status}
-                        </span>
-                        <span className="text-xs text-gray-500">{formatTimeAgo(thesis.submittedAt)}</span>
-                      </div>
-                    </motion.div>
-                  ))}
-                  {(!dashboardData.myTheses || dashboardData.myTheses.length === 0) && (
-                    <p className="text-gray-500 text-center py-4">No theses yet</p>
-                  )}
+                      View All
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {dashboardData.myTheses && dashboardData.myTheses.slice(0, 5).map((thesis, index) => (
+                      <motion.div
+                        key={thesis.id}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: 0.4 + (index * 0.1) }}
+                        className="p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300 cursor-pointer"
+                        onClick={() => navigate(`/thesis/${thesis.id}`)}
+                      >
+                        <p className="text-sm font-medium text-gray-800 mb-1 line-clamp-2">{thesis.title}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium bg-${thesis.status === 'Published' ? 'green' : thesis.status === 'Under Review' ? 'yellow' : 'gray'}-100 text-${thesis.status === 'Published' ? 'green' : thesis.status === 'Under Review' ? 'yellow' : 'gray'}-800`}>
+                            {thesis.status}
+                          </span>
+                          <span className="text-xs text-gray-500">{formatTimeAgo(thesis.submittedAt)}</span>
+                        </div>
+                      </motion.div>
+                    ))}
+                    {(!dashboardData.myTheses || dashboardData.myTheses.length === 0) && (
+                      <p className="text-gray-500 text-center py-4">No theses yet</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </motion.div>
+              </motion.div>
+            )}
           </div>
 
           {/* Upcoming Events - Separate row */}
