@@ -640,18 +640,18 @@ const AdminDashboard = () => {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3, delay: 0.7 }}
-                    className="p-4 border-2 border-blue-200 rounded-xl hover:border-blue-400 hover:shadow-lg transition-all duration-300 cursor-pointer group bg-gradient-to-br from-blue-50 to-white hover:from-blue-100 hover:to-white transform hover:-translate-y-1"
-                    onClick={() => navigate('/admin/departments?action=create')}
+                    className="p-4 border-2 border-purple-200 rounded-xl hover:border-purple-400 hover:shadow-lg transition-all duration-300 cursor-pointer group bg-gradient-to-br from-purple-50 to-white hover:from-purple-100 hover:to-white transform hover:-translate-y-1"
+                    onClick={() => navigate('/calendar')}
                   >
                     <div className="flex items-center gap-3">
                       <div 
-                        className="p-2 rounded-xl transition-all duration-300 transform group-hover:rotate-6 bg-blue-100"
+                        className="p-2 rounded-xl transition-all duration-300 transform group-hover:rotate-6 bg-purple-100"
                       >
-                        <PlusIcon className="h-5 w-5 text-blue-600" />
+                        <CalendarIcon className="h-5 w-5 text-purple-600" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-gray-800">Add Departments</h3>
-                        <p className="text-sm text-gray-600">Create new departments</p>
+                        <h3 className="font-semibold text-gray-800">Calendar</h3>
+                        <p className="text-sm text-gray-600">View calendar events</p>
                       </div>
                     </div>
                   </motion.div>
