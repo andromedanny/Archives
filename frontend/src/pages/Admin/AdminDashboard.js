@@ -420,11 +420,11 @@ const AdminDashboard = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.1 }}
               className="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl border border-gray-100 hover:border-purple-200 transition-all duration-300 cursor-pointer group transform hover:-translate-y-1"
-              onClick={() => navigate('/admin/theses')}
+              onClick={() => navigate('/admin/thesis')}
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600 mb-1">Total Theses</p>
+                  <p className="text-sm font-medium text-gray-600 mb-1">Total Thesis</p>
                   <p style={{ color: getColorStyles('blue').text }} className="text-3xl font-bold">{stats.totalTheses}</p>
                 </div>
                 <div 
@@ -489,7 +489,7 @@ const AdminDashboard = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.4 }}
               className="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl border border-gray-100 hover:border-purple-200 transition-all duration-300 cursor-pointer group transform hover:-translate-y-1"
-              onClick={() => navigate('/admin/theses?filter=recent')}
+              onClick={() => navigate('/admin/thesis?filter=recent')}
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -526,7 +526,7 @@ const AdminDashboard = () => {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3, delay: 0.2 }}
                     className="p-4 border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:shadow-lg transition-all duration-300 cursor-pointer group bg-gradient-to-br from-white to-gray-50 hover:from-purple-50 hover:to-white transform hover:-translate-y-1"
-                    onClick={() => navigate('/admin/theses')}
+                    onClick={() => navigate('/admin/thesis')}
                   >
                     <div className="flex items-center gap-3">
                       <div 
@@ -715,7 +715,7 @@ const AdminDashboard = () => {
                     Recent Theses
                   </h2>
                   <button
-                    onClick={() => navigate('/admin/theses')}
+                    onClick={() => navigate('/admin/thesis')}
                     className="text-xs text-blue-600 hover:text-blue-700 font-medium"
                   >
                     View All
@@ -729,7 +729,7 @@ const AdminDashboard = () => {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.3, delay: 0.4 + (index * 0.1) }}
                       className="p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300 cursor-pointer"
-                      onClick={() => navigate(`/admin/theses/${thesis.id}`)}
+                      onClick={() => navigate(`/admin/thesis/${thesis.id}`)}
                     >
                       <p className="text-sm font-medium text-gray-800 mb-1 line-clamp-2">{thesis.title}</p>
                       <div className="flex items-center gap-2 mt-2">
@@ -817,7 +817,7 @@ const AdminDashboard = () => {
                         </p>
                       </div>
                       <button
-                        onClick={() => navigate(`/admin/theses/${thesis.id}/review`)}
+                        onClick={() => navigate(`/admin/thesis/${thesis.id}/review`)}
                         className="px-3 py-1 bg-red-500 text-white rounded-lg text-xs hover:bg-red-600 transition-colors"
                       >
                         Review

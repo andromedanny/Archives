@@ -110,7 +110,7 @@ const Dashboard = () => {
     if (currentUser?.role === 'admin') {
       return [
         {
-          title: 'Total Theses',
+          title: 'Total Thesis',
           value: baseStats.totalTheses || 0,
           icon: BookOpenIcon,
           color: 'blue',
