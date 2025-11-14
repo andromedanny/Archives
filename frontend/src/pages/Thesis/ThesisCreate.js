@@ -265,7 +265,7 @@ const ThesisCreate = () => {
         department: formData.department,
         program: isStudent ? userCourseFromProfile || null : formData.program,
         academicYear: formData.academicYear,
-        semester: '1st Semester', // Default semester value (required by backend but not shown in form)
+        semester: '1st Semester', // Default semester value
         category: 'Undergraduate', // Default category value
         keywords: formData.keywords 
           ? formData.keywords.split(',').map(k => k.trim()).filter(k => k)
@@ -334,7 +334,7 @@ const ThesisCreate = () => {
   return (
     <>
       <Helmet>
-        <title>Add Old Thesis - FAITH Colleges Thesis Archive</title>
+        <title>Create Thesis - FAITH Colleges Thesis Archive</title>
         <meta name="description" content="Submit a new thesis to the archive" />
       </Helmet>
       
@@ -349,7 +349,7 @@ const ThesisCreate = () => {
             transition={{ duration: 0.5 }}
             className="bg-white p-8 rounded-xl shadow-lg border border-gray-100"
           >
-            <h1 className="text-3xl font-bold text-gray-800 mb-8">Add Old Thesis</h1>
+            <h1 className="text-3xl font-bold text-gray-800 mb-8">Create New Thesis</h1>
             
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
@@ -477,47 +477,6 @@ const ThesisCreate = () => {
               </div>
 
               <div>
-                <label htmlFor="pdfFile" className="block text-sm font-medium text-gray-700 mb-2">
-                  Upload PDF Document *
-                </label>
-                <div className="mt-1 flex items-center">
-                  <input
-                    type="file"
-                    id="pdfFile"
-                    accept=".pdf,application/pdf"
-                    onChange={handleFileChange}
-                    disabled={isUploading}
-                    required
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                  {pdfFileName && (
-                    <span className="ml-3 text-sm text-gray-600">
-                      {pdfFileName}
-                    </span>
-                  )}
-                </div>
-                <p className="mt-1 text-sm text-gray-500">
-                  Maximum file size: 10MB. PDF format only. The file will be uploaded to the server storage (Supabase Storage if configured, otherwise local storage).
-                </p>
-                
-                {/* Upload Progress Indicator (Objective 4.3, 4.5: Clear feedback) */}
-                {isUploading && (
-                  <div className="mt-4">
-                    <ProgressBar 
-                      progress={uploadProgress}
-                      label={uploadStatus === 'uploading' ? 'Uploading PDF...' : uploadStatus === 'success' ? 'Upload complete!' : 'Upload failed'}
-                      color={uploadStatus === 'success' ? 'green' : uploadStatus === 'error' ? 'red' : 'blue'}
-                    />
-                    {uploadStatus === 'uploading' && (
-                      <p className="mt-2 text-xs text-gray-500">
-                        Please wait while your file is being uploaded. Do not close this page.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Authors
                 </label>
@@ -615,6 +574,42 @@ const ThesisCreate = () => {
                 <p className="mt-1 text-sm text-gray-500">Separate keywords with commas</p>
               </div>
 
+              <div className="mt-6">
+                <label htmlFor="pdfFile" className="block text-sm font-medium text-gray-700 mb-2">
+                  Upload PDF Document
+                </label>
+                <div className="mt-1 flex items-center">
+                  <input
+                    type="file"
+                    id="pdfFile"
+                    accept=".pdf,application/pdf"
+                    onChange={handleFileChange}
+                    disabled={isUploading}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  {pdfFileName && (
+                    <span className="ml-3 text-sm text-gray-600">
+                      {pdfFileName}
+                    </span>
+                  )}
+                </div>
+                
+                {/* Upload Progress Indicator (Objective 4.3, 4.5: Clear feedback) */}
+                {isUploading && (
+                  <div className="mt-4">
+                    <ProgressBar 
+                      progress={uploadProgress}
+                      label={uploadStatus === 'uploading' ? 'Uploading PDF...' : uploadStatus === 'success' ? 'Upload complete!' : 'Upload failed'}
+                      color={uploadStatus === 'success' ? 'green' : uploadStatus === 'error' ? 'red' : 'blue'}
+                    />
+                    {uploadStatus === 'uploading' && (
+                      <p className="mt-2 text-xs text-gray-500">
+                        Please wait while your file is being uploaded. Do not close this page.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <div className="flex gap-4 pt-6">
                 <button
@@ -622,7 +617,7 @@ const ThesisCreate = () => {
                   disabled={isSubmitting}
                   className="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                 >
-                  {isSubmitting ? 'Adding...' : 'Add Old Thesis'}
+                  {isSubmitting ? 'Creating...' : 'Create Thesis'}
                 </button>
                 <button
                   type="button"
