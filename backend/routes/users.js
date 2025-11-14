@@ -62,13 +62,13 @@ router.get('/', protect, [
       where.course = req.query.course;
     }
 
-    // Search functionality
+    // Search functionality (case-insensitive)
     if (req.query.search) {
       where[Op.or] = [
-        { firstName: { [Op.like]: `%${req.query.search}%` } },
-        { lastName: { [Op.like]: `%${req.query.search}%` } },
-        { email: { [Op.like]: `%${req.query.search}%` } },
-        { student_id: { [Op.like]: `%${req.query.search}%` } }
+        { firstName: { [Op.iLike]: `%${req.query.search}%` } },
+        { lastName: { [Op.iLike]: `%${req.query.search}%` } },
+        { email: { [Op.iLike]: `%${req.query.search}%` } },
+        { student_id: { [Op.iLike]: `%${req.query.search}%` } }
       ];
     }
 

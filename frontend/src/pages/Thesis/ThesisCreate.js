@@ -33,6 +33,7 @@ const ThesisCreate = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [departments, setDepartments] = useState([]);
   const [courses, setCourses] = useState([]);
+  const [advisers, setAdvisers] = useState([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [pdfFile, setPdfFile] = useState(null);
   const [pdfFileName, setPdfFileName] = useState('');
@@ -90,6 +91,70 @@ const ThesisCreate = () => {
 
     fetchData();
   }, []);
+
+  // Fetch advisers when department changes
+  useEffect(() => {
+    const fetchAdvisers = async () => {
+      if (!formData.department) {
+        setAdvisers([]);
+        setFormData(prev => ({ ...prev, adviserId: '' }));
+        return;
+      }
+
+      try {
+        // Fetch users with adviser, faculty, or prof roles from the selected department
+        // Backend only accepts single role, so we fetch each role separately and combine
+        const [adviserResponse, facultyResponse, profResponse] = await Promise.all([
+          usersAPI.getUsers({
+            role: 'adviser',
+            department: formData.department,
+            limit: 100
+          }).catch(() => ({ data: { success: false, data: [] } })),
+          usersAPI.getUsers({
+            role: 'faculty',
+            department: formData.department,
+            limit: 100
+          }).catch(() => ({ data: { success: false, data: [] } })),
+          usersAPI.getUsers({
+            role: 'prof',
+            department: formData.department,
+            limit: 100
+          }).catch(() => ({ data: { success: false, data: [] } }))
+        ]);
+
+        // Combine all advisers from different roles and remove duplicates
+        const allAdvisers = [];
+        const seenIds = new Set();
+
+        [adviserResponse, facultyResponse, profResponse].forEach(response => {
+          if (response.data && response.data.success) {
+            const users = response.data.data || [];
+            users.forEach(user => {
+              if (!seenIds.has(user.id)) {
+                seenIds.add(user.id);
+                allAdvisers.push(user);
+              }
+            });
+          }
+        });
+
+        setAdvisers(allAdvisers);
+        
+        // Clear adviser selection if current adviser is not in the new department
+        if (formData.adviserId) {
+          const currentAdviser = allAdvisers.find(a => a.id.toString() === formData.adviserId.toString());
+          if (!currentAdviser) {
+            setFormData(prev => ({ ...prev, adviserId: '' }));
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching advisers:', error);
+        setAdvisers([]);
+      }
+    };
+
+    fetchAdvisers();
+  }, [formData.department]);
 
   // Filter courses based on selected department
   const filteredCourses = formData.department 
@@ -174,8 +239,28 @@ const ThesisCreate = () => {
       const userDeptNorm = normalize(userDepartmentFromProfile);
       const userCourseNorm = normalize(userCourse, { removeSpaces: true, removeDashes: true });
 
+      // Case-insensitive search filter
+      const searchLower = query.trim().toLowerCase();
       const filtered = users.filter((candidate) => {
         if (candidate.id === user?.id) return false;
+        
+        // Case-insensitive search matching
+        if (searchLower) {
+          const firstName = (candidate.firstName || '').toLowerCase();
+          const lastName = (candidate.lastName || '').toLowerCase();
+          const email = (candidate.email || '').toLowerCase();
+          const fullName = `${firstName} ${lastName}`.toLowerCase();
+          
+          const matchesSearch = firstName.includes(searchLower) || 
+                               lastName.includes(searchLower) || 
+                               email.includes(searchLower) ||
+                               fullName.includes(searchLower);
+          
+          if (!matchesSearch) {
+            return false;
+          }
+        }
+        
         const candidateDeptRaw = candidate.department?.name || candidate.department || '';
         const candidateCourseRaw = candidate.course?.code || candidate.course || '';
 
@@ -464,15 +549,24 @@ const ThesisCreate = () => {
                   <label htmlFor="adviserId" className="block text-sm font-medium text-gray-700 mb-2">
                     Adviser (Optional)
                   </label>
-                  <input
-                    type="text"
+                  <select
                     id="adviserId"
                     name="adviserId"
                     value={formData.adviserId}
                     onChange={handleChange}
-                    placeholder="Enter adviser name"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
+                    disabled={!formData.department}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+                  >
+                    <option value="">{formData.department ? 'Select Adviser' : 'Select Department first'}</option>
+                    {advisers.map((adviser) => (
+                      <option key={adviser.id} value={adviser.id}>
+                        {adviser.firstName} {adviser.lastName} {adviser.email ? `(${adviser.email})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {formData.department && advisers.length === 0 && (
+                    <p className="mt-1 text-xs text-gray-500">No advisers found in this department</p>
+                  )}
                 </div>
               </div>
 
