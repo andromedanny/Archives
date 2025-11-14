@@ -23,8 +23,8 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, roles: ['student', 'faculty', 'admin', 'adviser'] },
   { name: 'Thesis Archive', href: '/thesis', icon: BookOpenIcon, roles: ['student', 'faculty', 'admin', 'adviser'] },
   { name: 'My Theses', href: '/my-theses', icon: DocumentTextIcon, roles: ['student', 'faculty', 'admin', 'adviser'] },
-  { name: 'Add Old Thesis', href: '/thesis/create', icon: AcademicCapIcon, roles: ['student', 'faculty'] },
-  { name: 'Calendar', href: '/calendar', icon: CalendarIcon, roles: ['student', 'faculty', 'admin', 'adviser'] },
+  { name: 'Create Thesis', href: '/thesis/create', icon: AcademicCapIcon, roles: ['student', 'faculty'] },
+  { name: 'Calendar', href: '/calendar', icon: CalendarIcon, roles: ['faculty', 'admin', 'adviser'] },
   { name: 'Profile', href: '/profile', icon: UsersIcon, roles: ['student', 'faculty', 'admin', 'adviser'] },
 ];
 

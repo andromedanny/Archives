@@ -239,7 +239,8 @@ const Dashboard = () => {
         }
       ];
     } else {
-      return [
+      // Student and other roles (excluding admin and adviser)
+      const actions = [
         {
           title: 'Submit Thesis',
           description: 'Submit a new thesis for review',
@@ -260,22 +261,29 @@ const Dashboard = () => {
           icon: DocumentTextIcon,
           color: 'green',
           link: '/my-theses'
-        },
-        {
+        }
+      ];
+      
+      // Only add Calendar for non-student roles
+      if (currentUser?.role !== 'student') {
+        actions.push({
           title: 'Calendar',
           description: 'View upcoming events and defenses',
           icon: CalendarIcon,
           color: 'purple',
           link: '/calendar'
-        },
-        {
-          title: 'Profile',
-          description: 'Update your profile information',
-          icon: UserGroupIcon,
-          color: 'orange',
-          link: '/profile'
-        }
-      ];
+        });
+      }
+      
+      actions.push({
+        title: 'Profile',
+        description: 'Update your profile information',
+        icon: UserGroupIcon,
+        color: 'orange',
+        link: '/profile'
+      });
+      
+      return actions;
     }
   };
 
