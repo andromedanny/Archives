@@ -6,10 +6,12 @@ import Header from '../../components/Layout/Header';
 import Footer from '../../components/Layout/Footer';
 import BackgroundImage from '../../components/UI/BackgroundImage';
 import { thesisAPI, departmentsAPI } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 const ThesisList = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [theses, setTheses] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [filters, setFilters] = useState({
@@ -27,6 +29,9 @@ const ThesisList = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const itemsPerPage = 10;
+  
+  // Check if user is an adviser
+  const isAdviser = user && user.role === 'adviser';
 
   const fetchTheses = async () => {
     try {
@@ -115,6 +120,16 @@ const ThesisList = () => {
     fetchDepartments();
   }, []);
 
+  // Set department filter to adviser's department when component loads
+  useEffect(() => {
+    if (isAdviser && user.department) {
+      setFilters(prev => ({
+        ...prev,
+        department: user.department
+      }));
+    }
+  }, [isAdviser, user?.department]);
+
   // Fetch theses when filters or page changes (Objective 5.3: Advanced search)
   useEffect(() => {
     fetchTheses();
@@ -122,6 +137,10 @@ const ThesisList = () => {
   }, [currentPage, filters.search, filters.keywords, filters.program, filters.department, filters.academicYear, filters.category, filters.dateFrom, filters.dateTo]);
 
   const handleFilterChange = (key, value) => {
+    // Prevent advisers from changing their department filter
+    if (key === 'department' && isAdviser) {
+      return;
+    }
     setFilters(prev => ({
       ...prev,
       [key]: value
@@ -134,7 +153,7 @@ const ThesisList = () => {
       search: '',
       keywords: '',
       program: '', // Keep for backward compatibility but not shown in UI
-      department: '',
+      department: isAdviser && user?.department ? user.department : '', // Preserve adviser's department
       academicYear: '',
       category: '',
       dateFrom: '',
@@ -269,12 +288,18 @@ const ThesisList = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Department
+                    {isAdviser && user?.department && (
+                      <span className="ml-2 text-xs text-gray-500">(Fixed to your department)</span>
+                    )}
                   </label>
                   {departments.length > 0 ? (
                     <select
                       value={filters.department}
                       onChange={(e) => handleFilterChange('department', e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={isAdviser && user?.department}
+                      className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        isAdviser && user?.department ? 'bg-gray-100 cursor-not-allowed' : ''
+                      }`}
                     >
                       <option value="">All Departments</option>
                       {departments
@@ -291,7 +316,10 @@ const ThesisList = () => {
                       value={filters.department}
                       onChange={(e) => handleFilterChange('department', e.target.value)}
                       placeholder="Enter department name..."
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={isAdviser && user?.department}
+                      className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        isAdviser && user?.department ? 'bg-gray-100 cursor-not-allowed' : ''
+                      }`}
                     />
                   )}
                 </div>
