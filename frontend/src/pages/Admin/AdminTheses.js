@@ -39,6 +39,8 @@ const AdminTheses = () => {
     status: 'draft',
     isPublic: true
   });
+  const [pdfFile, setPdfFile] = useState(null);
+  const [pdfFileName, setPdfFileName] = useState('');
 
   const statusLabelMap = {
     draft: 'Draft',
@@ -138,7 +140,7 @@ const AdminTheses = () => {
   };
 
   const handleAddNew = () => {
-    console.log('Add New Thesis clicked - opening modal');
+    console.log('Add Old Thesis clicked - opening modal');
     setEditingThesis(null);
     setFormData({
       title: '',
@@ -152,13 +154,44 @@ const AdminTheses = () => {
       status: 'draft',
       isPublic: true
     });
+    setPdfFile(null);
+    setPdfFileName('');
     setShowAddModal(true);
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      if (file.type !== 'application/pdf') {
+        toast.error('Please upload a PDF file only');
+        e.target.value = '';
+        return;
+      }
+      
+      // Validate file size (10MB max)
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        toast.error('File size must be less than 10MB');
+        e.target.value = '';
+        return;
+      }
+      
+      setPdfFile(file);
+      setPdfFileName(file.name);
+    }
   };
 
   const handleSave = async () => {
     try {
       if (!formData.department || !formData.program || !formData.academicYear) {
         toast.error('Please complete the department, course, and academic year fields.');
+        return;
+      }
+
+      // Validate PDF upload for new theses
+      if (!editingThesis && !pdfFile) {
+        toast.error('Please upload a PDF document.');
         return;
       }
 
@@ -208,7 +241,19 @@ const AdminTheses = () => {
             });
           }
 
-          toast.success('Thesis created successfully');
+          // Upload PDF if provided
+          if (pdfFile) {
+            try {
+              await thesisAPI.uploadDocument(createdThesis.id, pdfFile);
+              toast.success('Thesis created and PDF uploaded successfully!');
+            } catch (uploadError) {
+              console.error('Error uploading PDF:', uploadError);
+              toast.error('Thesis created but PDF upload failed. You can upload it later.');
+            }
+          } else {
+            toast.success('Thesis created successfully');
+          }
+
           setShowAddModal(false);
           fetchTheses();
         } else {
@@ -228,6 +273,8 @@ const AdminTheses = () => {
         status: 'draft',
         isPublic: true
       });
+      setPdfFile(null);
+      setPdfFileName('');
       setEditingThesis(null);
     } catch (error) {
       console.error('Error saving thesis:', error);
@@ -350,7 +397,7 @@ const AdminTheses = () => {
                 onClick={handleAddNew}
                 className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
               >
-                Add New Thesis
+                Add Old Thesis
               </button>
             </div>
 
@@ -590,7 +637,7 @@ const AdminTheses = () => {
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-800">
-                  {editingThesis ? 'Edit Thesis' : 'Add New Thesis'}
+                  {editingThesis ? 'Edit Thesis' : 'Add Old Thesis'}
                 </h2>
                 <button
                   onClick={() => {
@@ -657,28 +704,6 @@ const AdminTheses = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Course *
-                    </label>
-                    <select
-                    name="program"
-                    value={formData.program}
-                      onChange={handleInputChange}
-                      required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                    <option value="">Select Course</option>
-                    {filteredCourses.map((course) => (
-                      <option key={course.id} value={course.code}>
-                        {getCourseLabel(course)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
                     Academic Year *
                     </label>
                   <select
@@ -696,6 +721,9 @@ const AdminTheses = () => {
                     ))}
                   </select>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Department *
@@ -718,25 +746,27 @@ const AdminTheses = () => {
                       ))}
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Course *
+                    </label>
+                    <select
+                    name="program"
+                    value={formData.program}
+                      onChange={handleInputChange}
+                      required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                    <option value="">Select Course</option>
+                    {filteredCourses.map((course) => (
+                      <option key={course.id} value={course.code}>
+                        {getCourseLabel(course)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Semester *
-                  </label>
-                  <select
-                    name="semester"
-                    value={formData.semester}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="1st Semester">1st Semester</option>
-                    <option value="2nd Semester">2nd Semester</option>
-                    <option value="Summer">Summer</option>
-                  </select>
-                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Category *
@@ -754,7 +784,31 @@ const AdminTheses = () => {
                     <option value="Research Paper">Research Paper</option>
                   </select>
                 </div>
-              </div>
+
+                {!editingThesis && (
+                  <div>
+                    <label htmlFor="pdfFile" className="block text-sm font-medium text-gray-700 mb-1">
+                      Upload PDF Document *
+                    </label>
+                    <div className="mt-1 flex items-center">
+                      <input
+                        type="file"
+                        id="pdfFile"
+                        accept=".pdf,application/pdf"
+                        onChange={handleFileChange}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                      />
+                      {pdfFileName && (
+                        <span className="ml-3 text-sm text-gray-600">
+                          {pdfFileName}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Maximum file size: 10MB. PDF format only.
+                    </p>
+                  </div>
+                )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
