@@ -59,6 +59,14 @@ const Dashboard = () => {
     console.log('Dashboard state:', { isLoading, error, hasData: !!dashboardData.stats });
   }, [isLoading, error, dashboardData]);
 
+  // Helper to generate a stable key for an activity
+  const getActivityKey = (activity) => {
+    const rawId = activity?.id != null ? String(activity.id) : '';
+    const rawDate = activity?.date ? String(activity.date) : '';
+    const rawTitle = activity?.title ? String(activity.title) : '';
+    return `${rawId}|${rawDate}|${rawTitle}`;
+  };
+
   // Load dismissed activities from localStorage per user
   useEffect(() => {
     try {
@@ -85,7 +93,7 @@ const Dashboard = () => {
   }, [dismissedActivityIds, currentUser?.id]);
 
   const dismissActivity = (id) => {
-    setDismissedActivityIds((prev) => Array.from(new Set([...(prev || []), id])));
+    setDismissedActivityIds((prev) => Array.from(new Set([...(prev || []), String(id)])));
   };
 
   const fetchDashboardData = async () => {
@@ -603,7 +611,7 @@ const Dashboard = () => {
                   </h2>
                   <div className="space-y-3">
                     {dashboardData.recentActivity && dashboardData.recentActivity
-                      .filter((a) => !dismissedActivityIds.includes(a.id))
+                      .filter((a) => !dismissedActivityIds.includes(getActivityKey(a)) && !dismissedActivityIds.includes(String(a.id)))
                       .slice(0, 5)
                       .map((activity, index) => (
                       <motion.div
@@ -621,7 +629,7 @@ const Dashboard = () => {
                           <p className="text-xs text-gray-500">{formatTimeAgo(activity.date)}</p>
                         </div>
                         <button
-                          onClick={() => dismissActivity(activity.id)}
+                          onClick={() => dismissActivity(getActivityKey(activity))}
                           className="ml-auto p-1 rounded-md hover:bg-gray-200 transition-colors self-start"
                           aria-label="Dismiss notification"
                           title="Dismiss"
@@ -630,7 +638,7 @@ const Dashboard = () => {
                         </button>
                       </motion.div>
                     ))}
-                    {(!dashboardData.recentActivity || dashboardData.recentActivity.filter((a) => !dismissedActivityIds.includes(a.id)).length === 0) && (
+                    {(!dashboardData.recentActivity || dashboardData.recentActivity.filter((a) => !dismissedActivityIds.includes(getActivityKey(a)) && !dismissedActivityIds.includes(String(a.id))).length === 0) && (
                       <p className="text-gray-500 text-center py-4">No recent activity</p>
                     )}
                   </div>
