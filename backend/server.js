@@ -18,9 +18,9 @@ const courseRoutes = require('./routes/courses');
 
 const app = express();
 
-// Trust proxy - Required for Render, Vercel, and other hosting platforms that use reverse proxies
-// This allows express-rate-limit to correctly identify client IPs
-app.set('trust proxy', true);
+// Trust only the first proxy (e.g., Railway/Render). Avoid 'true' which is too permissive.
+// This allows express-rate-limit to correctly identify client IPs without weakening security.
+app.set('trust proxy', 1);
 
 // CORS must be configured BEFORE other middleware
 const allowedOrigins = [
