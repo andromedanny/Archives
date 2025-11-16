@@ -374,7 +374,7 @@ router.get('/:id/view', optionalAuth, async (req, res) => {
     // Check if user can view this thesis
     // Public theses with Published status can be viewed by anyone
     // Private theses or non-published theses require authentication
-    // Admins can view all theses
+    // Admins and advisers can view all theses they have access to
     if (!thesis.is_public || thesis.status !== 'Published') {
       // Admins can view all theses
       if (req.user && req.user.role === 'admin') {
@@ -382,7 +382,12 @@ router.get('/:id/view', optionalAuth, async (req, res) => {
       } else if (req.user) {
         // Check if user is author
         const authorIds = thesis.authors.map(a => a.id);
-        if (!authorIds.includes(req.user.id)) {
+        const isAuthor = authorIds.includes(req.user.id);
+        
+        // Check if user is the adviser
+        const isAdviser = thesis.adviser_id === req.user.id;
+        
+        if (!isAuthor && !isAdviser) {
           return res.status(403).json({
             success: false,
             message: 'Access denied. This thesis is not publicly available.'
@@ -530,7 +535,7 @@ router.get('/:id/download', optionalAuth, async (req, res) => {
     // Check if user can download this thesis
     // Public theses with Published status can be downloaded by anyone
     // Private theses or non-published theses require authentication
-    // Admins can download all theses
+    // Admins and advisers can download all theses they have access to
     if (!thesis.is_public || thesis.status !== 'Published') {
       // Admins can download all theses
       if (req.user && req.user.role === 'admin') {
@@ -538,7 +543,12 @@ router.get('/:id/download', optionalAuth, async (req, res) => {
       } else if (req.user) {
         // Check if user is author
         const authorIds = thesis.authors.map(a => a.id);
-        if (!authorIds.includes(req.user.id)) {
+        const isAuthor = authorIds.includes(req.user.id);
+        
+        // Check if user is the adviser
+        const isAdviser = thesis.adviser_id === req.user.id;
+        
+        if (!isAuthor && !isAdviser) {
           return res.status(403).json({
             success: false,
             message: 'Access denied. This thesis is not publicly available.'
@@ -850,7 +860,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
     // Check if user can view this thesis
     // Public theses with Published status can be viewed by anyone
     // Private theses or non-published theses require authentication
-    // Admins can view all theses
+    // Admins and advisers can view all theses they have access to
     if (!thesis.is_public || thesis.status !== 'Published') {
       // Admins can view all theses
       if (req.user && req.user.role === 'admin') {
@@ -858,7 +868,12 @@ router.get('/:id', optionalAuth, async (req, res) => {
       } else if (req.user) {
         // Check if user is author
         const authorIds = thesis.authors.map(a => a.id);
-        if (!authorIds.includes(req.user.id)) {
+        const isAuthor = authorIds.includes(req.user.id);
+        
+        // Check if user is the adviser
+        const isAdviser = thesis.adviser_id === req.user.id;
+        
+        if (!isAuthor && !isAdviser) {
           return res.status(403).json({
             success: false,
             message: 'Access denied. This thesis is not publicly available.'
