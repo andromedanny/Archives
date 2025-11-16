@@ -571,7 +571,7 @@ const Dashboard = () => {
                   <div className="w-1 h-6 bg-gradient-to-b from-green-600 to-green-400 rounded-full"></div>
                   Upcoming Events
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
                   {dashboardData.upcomingEvents && dashboardData.upcomingEvents.slice(0, 3).map((event, index) => (
                     <motion.div
                       key={index}
@@ -590,7 +590,7 @@ const Dashboard = () => {
                     </motion.div>
                   ))}
                   {(!dashboardData.upcomingEvents || dashboardData.upcomingEvents.length === 0) && (
-                    <p className="text-gray-500 text-center py-4 col-span-3">No upcoming events</p>
+                    <p className="text-gray-500 text-center py-4">No upcoming events</p>
                   )}
                 </div>
               </div>
