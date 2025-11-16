@@ -19,6 +19,12 @@ const Profile = () => {
         return;
       }
 
+      // Only fetch stats for students (they're the only ones who see thesis activity)
+      if (user.role !== 'student') {
+        setIsLoading(false);
+        return;
+      }
+
       try {
         const response = await usersAPI.getUserStats(user.id);
         const data = response.data || response;
@@ -84,7 +90,7 @@ const Profile = () => {
 
       <Header />
 
-      <main className="min-h-screen bg-gray-50 pt-24 pb-16">
+      <main className="min-h-screen bg-gray-50 pt-24 pb-16 flex items-center justify-center">
         <div className="w-11/12 max-w-5xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -109,26 +115,32 @@ const Profile = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className={user.role === 'admin' ? 'grid grid-cols-1 gap-8' : user.role === 'adviser' ? 'grid grid-cols-1 gap-8' : 'grid grid-cols-1 md:grid-cols-2 gap-8'}>
               <section className="space-y-4">
                 <h2 className="text-lg font-semibold text-gray-800">Profile Details</h2>
                 <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 space-y-4">
-                  <Detail label="Department" value={departmentName} />
-                  <Detail label="Course" value={courseName} />
+                  {user.role !== 'admin' && (
+                    <Detail label="Department" value={departmentName} />
+                  )}
+                  {user.role === 'student' && (
+                    <Detail label="Course" value={courseName} />
+                  )}
                   <Detail label="Member Since" value={joinDate} />
                   <Detail label="Contact Email" value={user.email} />
                   <Detail label="Status" value={isActive ? 'Active' : 'Inactive'} />
                 </div>
               </section>
 
-              <section className="space-y-4">
-                <h2 className="text-lg font-semibold text-gray-800">Thesis Activity</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <StatCard label="Theses Submitted" value={stats.thesisCount} color="blue" />
-                  <StatCard label="Downloads" value={stats.downloads} color="green" />
-                  <StatCard label="Views" value={stats.views} color="purple" />
-                </div>
-              </section>
+              {user.role === 'student' && (
+                <section className="space-y-4">
+                  <h2 className="text-lg font-semibold text-gray-800">Thesis Activity</h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <StatCard label="Theses Submitted" value={stats.thesisCount} color="blue" />
+                    <StatCard label="Downloads" value={stats.downloads} color="green" />
+                    <StatCard label="Views" value={stats.views} color="purple" />
+                  </div>
+                </section>
+              )}
             </div>
           </motion.div>
         </div>
