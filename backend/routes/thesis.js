@@ -1319,7 +1319,7 @@ router.put('/:id/submit', protect, async (req, res) => {
     }
 
     // Check if thesis has required document (optional check)
-    if (!thesis.mainDocument) {
+    if (!thesis.main_document) {
       return res.status(400).json({
         success: false,
         message: 'Main document is recommended before submission'
@@ -1328,7 +1328,7 @@ router.put('/:id/submit', protect, async (req, res) => {
 
     // Update status
     thesis.status = 'Under Review';
-    thesis.submittedAt = new Date();
+    thesis.submitted_at = new Date();
     await thesis.save();
 
     res.json({

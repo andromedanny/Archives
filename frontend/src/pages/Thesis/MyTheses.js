@@ -122,6 +122,20 @@ const MyTheses = () => {
     }
   };
 
+  const handleSubmit = async (thesisId) => {
+    if (!window.confirm('Are you sure you want to submit this thesis for review? Once submitted, you may not be able to edit it until it is reviewed.')) {
+      return;
+    }
+    try {
+      await thesisAPI.submitThesis(thesisId);
+      toast.success('Thesis submitted for review successfully');
+      fetchTheses();
+    } catch (error) {
+      console.error('Error submitting thesis:', error);
+      toast.error(error.response?.data?.message || 'Failed to submit thesis for review');
+    }
+  };
+
   return (
     <>
       <Helmet>
@@ -229,18 +243,30 @@ const MyTheses = () => {
                               PDF
                             </button>
                           )}
-                          <button
-                            onClick={() => handleEdit(thesis.id)}
-                            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-md hover:shadow-lg text-sm"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(thesis.id)}
-                            className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-300 shadow-md hover:shadow-lg text-sm"
-                          >
-                            Delete
-                          </button>
+                          {isDraft && (
+                            <button
+                              onClick={() => handleSubmit(thesis.id)}
+                              className="px-4 py-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-lg hover:from-orange-700 hover:to-orange-800 transition-all duration-300 shadow-md hover:shadow-lg text-sm"
+                            >
+                              Submit for Review
+                            </button>
+                          )}
+                          {isDraft && (
+                            <button
+                              onClick={() => handleEdit(thesis.id)}
+                              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-md hover:shadow-lg text-sm"
+                            >
+                              Edit
+                            </button>
+                          )}
+                          {isDraft && (
+                            <button
+                              onClick={() => handleDelete(thesis.id)}
+                              className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-300 shadow-md hover:shadow-lg text-sm"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </div>
                     </motion.div>
