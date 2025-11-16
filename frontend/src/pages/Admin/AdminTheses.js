@@ -338,6 +338,20 @@ const AdminTheses = () => {
     }
   };
 
+  const handleReject = async (thesisId) => {
+    if (!window.confirm('Are you sure you want to reject this thesis?')) {
+      return;
+    }
+    try {
+      await thesisAPI.updateThesis(thesisId, { status: 'Rejected' });
+      toast.success('Thesis rejected successfully');
+      fetchTheses();
+    } catch (error) {
+      console.error('Error rejecting thesis:', error);
+      toast.error(error.response?.data?.message || 'Failed to reject thesis');
+    }
+  };
+
   const handleDelete = async (thesisId) => {
     if (window.confirm('Are you sure you want to delete this thesis?')) {
       try {
@@ -607,14 +621,24 @@ const AdminTheses = () => {
                                 Edit
                               </button>
                               {thesisStatus === 'approved' && (
-                                <button
-                                  onClick={() => handlePublish(thesis.id)}
-                                  className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                                  title="Publish this approved thesis"
-                                >
-                                  <CheckIcon className="h-4 w-4" />
-                                  Publish
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() => handlePublish(thesis.id)}
+                                    className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                                    title="Publish this approved thesis"
+                                  >
+                                    <CheckIcon className="h-4 w-4" />
+                                    Publish
+                                  </button>
+                                  <button
+                                    onClick={() => handleReject(thesis.id)}
+                                    className="flex items-center gap-1 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                                    title="Reject this approved thesis"
+                                  >
+                                    <XMarkIcon className="h-4 w-4" />
+                                    Reject
+                                  </button>
+                                </>
                               )}
                               <button
                                 onClick={() => handleDelete(thesis.id)}

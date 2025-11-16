@@ -61,12 +61,12 @@ const AdviserTheses = () => {
   }, [currentPage]);
 
   const handleApprove = async (thesisId) => {
-    if (!window.confirm('Are you sure you want to approve this thesis? Only administrators can publish it.')) {
+    if (!window.confirm('Are you sure you want to approve this thesis? The status will change to "Approved" and an administrator can then publish it.')) {
       return;
     }
     try {
       await thesisAPI.updateThesis(thesisId, { status: 'Approved' });
-      toast.success('Thesis approved successfully. An administrator will review and publish it.');
+      toast.success('Thesis approved successfully. Status changed to "Approved". An administrator can now publish it.');
       fetchTheses();
     } catch (error) {
       console.error('Error approving thesis:', error);
