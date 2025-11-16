@@ -127,8 +127,8 @@ const AdminUsers = () => {
     // Combine: firstInitial + lastPart
     const emailLocal = `${firstInitial}${lastPart}`;
     
-    // Suggest firstasia.edu.ph for students, gmail.com for others
-    const domain = role === 'student' ? 'firstasia.edu.ph' : 'gmail.com';
+    // Use firstasia.edu.ph for all users
+    const domain = 'firstasia.edu.ph';
     return `${emailLocal}@${domain}`;
   };
 
