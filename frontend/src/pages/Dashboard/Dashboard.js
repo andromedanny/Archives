@@ -585,7 +585,7 @@ const Dashboard = () => {
                       </div>
                       <div className="flex-1">
                         <p className="text-sm font-medium text-gray-800">{event.title}</p>
-                        <p className="text-xs text-gray-500">{formatDate(event.eventDate || event.date)}</p>
+                        <p className="text-xs text-gray-500">{formatDate(event.event_date || event.eventDate || event.date)}</p>
                       </div>
                     </motion.div>
                   ))}
