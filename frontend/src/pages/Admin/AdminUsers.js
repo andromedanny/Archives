@@ -11,6 +11,7 @@ import {
   PencilIcon, 
   TrashIcon, 
   EyeIcon,
+  EyeSlashIcon,
   CheckIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline';
