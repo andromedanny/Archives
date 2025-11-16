@@ -681,7 +681,7 @@ const Dashboard = () => {
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium bg-${thesis.status === 'Published' ? 'green' : thesis.status === 'Under Review' ? 'yellow' : 'gray'}-100 text-${thesis.status === 'Published' ? 'green' : thesis.status === 'Under Review' ? 'yellow' : 'gray'}-800`}>
                             {thesis.status}
                           </span>
-                          <span className="text-xs text-gray-500">{formatTimeAgo(thesis.submittedAt)}</span>
+                          <span className="text-xs text-gray-500">{formatTimeAgo(thesis.submitted_at || thesis.submittedAt || thesis.createdAt)}</span>
                         </div>
                       </motion.div>
                     ))}
