@@ -483,6 +483,7 @@ const Dashboard = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
+              className="lg:col-span-1"
             >
               <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 h-full">
                 <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
@@ -519,41 +520,43 @@ const Dashboard = () => {
               </div>
             </motion.div>
 
-            {/* Recent Activity */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-            >
-              <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 h-full">
-                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <div className="w-1 h-6 bg-gradient-to-b from-purple-600 to-purple-400 rounded-full"></div>
-                  Recent Activity
-                </h2>
-                <div className="space-y-3">
-                  {dashboardData.recentActivity && dashboardData.recentActivity.slice(0, 5).map((activity, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.3, delay: 0.3 + (index * 0.1) }}
-                      className="flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300"
-                    >
-                      <div className={`p-1 rounded-full bg-${activity.type === 'thesis' ? 'blue' : 'green'}-100`}>
-                        <DocumentTextIcon className={`h-4 w-4 text-${activity.type === 'thesis' ? 'blue' : 'green'}-600`} />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-800">{activity.title}</p>
-                        <p className="text-xs text-gray-500">{formatTimeAgo(activity.date)}</p>
-                      </div>
-                    </motion.div>
-                  ))}
-                  {(!dashboardData.recentActivity || dashboardData.recentActivity.length === 0) && (
-                    <p className="text-gray-500 text-center py-4">No recent activity</p>
-                  )}
+            {/* Recent Activity (hidden for advisers) */}
+            {currentUser?.role !== 'adviser' && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+              >
+                <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 h-full">
+                  <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <div className="w-1 h-6 bg-gradient-to-b from-purple-600 to-purple-400 rounded-full"></div>
+                    Recent Activity
+                  </h2>
+                  <div className="space-y-3">
+                    {dashboardData.recentActivity && dashboardData.recentActivity.slice(0, 5).map((activity, index) => (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: 0.3 + (index * 0.1) }}
+                        className="flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300"
+                      >
+                        <div className={`p-1 rounded-full bg-${activity.type === 'thesis' ? 'blue' : 'green'}-100`}>
+                          <DocumentTextIcon className={`h-4 w-4 text-${activity.type === 'thesis' ? 'blue' : 'green'}-600`} />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-800">{activity.title}</p>
+                          <p className="text-xs text-gray-500">{formatTimeAgo(activity.date)}</p>
+                        </div>
+                      </motion.div>
+                    ))}
+                    {(!dashboardData.recentActivity || dashboardData.recentActivity.length === 0) && (
+                      <p className="text-gray-500 text-center py-4">No recent activity</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </motion.div>
+              </motion.div>
+            )}
 
             {/* My Theses - Hidden for advisers */}
             {currentUser?.role !== 'adviser' && (
@@ -601,44 +604,45 @@ const Dashboard = () => {
                 </div>
               </motion.div>
             )}
-          </div>
 
-          {/* Upcoming Events - Separate row */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.5 }}
-            className="mt-8 pb-32"
-          >
-            <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <div className="w-1 h-6 bg-gradient-to-b from-green-600 to-green-400 rounded-full"></div>
-                Upcoming Events
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {dashboardData.upcomingEvents && dashboardData.upcomingEvents.slice(0, 3).map((event, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3, delay: 0.5 + (index * 0.1) }}
-                    className="flex items-start gap-3 p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300"
-                  >
-                    <div className="p-1 rounded-full bg-purple-100">
-                      <CalendarIcon className="h-4 w-4 text-purple-600" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-800">{event.title}</p>
-                      <p className="text-xs text-gray-500">{formatDate(event.eventDate || event.date)}</p>
-                    </div>
-                  </motion.div>
-                ))}
-                {(!dashboardData.upcomingEvents || dashboardData.upcomingEvents.length === 0) && (
-                  <p className="text-gray-500 text-center py-4 col-span-3">No upcoming events</p>
-                )}
+            {/* Upcoming Events in grid (takes 2/3 width on large screens) */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.5 }}
+              className="lg:col-span-2"
+            >
+              <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 h-full">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-1 h-6 bg-gradient-to-b from-green-600 to-green-400 rounded-full"></div>
+                  Upcoming Events
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {dashboardData.upcomingEvents && dashboardData.upcomingEvents.slice(0, 3).map((event, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: 0.5 + (index * 0.1) }}
+                      className="flex items-start gap-3 p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300"
+                    >
+                      <div className="p-1 rounded-full bg-purple-100">
+                        <CalendarIcon className="h-4 w-4 text-purple-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-800">{event.title}</p>
+                        <p className="text-xs text-gray-500">{formatDate(event.eventDate || event.date)}</p>
+                      </div>
+                    </motion.div>
+                  ))}
+                  {(!dashboardData.upcomingEvents || dashboardData.upcomingEvents.length === 0) && (
+                    <p className="text-gray-500 text-center py-4 col-span-3">No upcoming events</p>
+                  )}
+                </div>
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          </div>
+          <div className="pb-32"></div>
         </div>
       </main>
       
