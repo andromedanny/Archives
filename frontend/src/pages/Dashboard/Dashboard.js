@@ -19,6 +19,7 @@ import {
   PlusIcon,
   CalendarIcon,
   DocumentTextIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 
 const Dashboard = () => {
@@ -37,6 +38,7 @@ const Dashboard = () => {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [dismissedActivityIds, setDismissedActivityIds] = useState([]);
 
   useEffect(() => {
     console.log('Dashboard: Component mounted, fetching data...');
@@ -56,6 +58,35 @@ const Dashboard = () => {
   useEffect(() => {
     console.log('Dashboard state:', { isLoading, error, hasData: !!dashboardData.stats });
   }, [isLoading, error, dashboardData]);
+
+  // Load dismissed activities from localStorage per user
+  useEffect(() => {
+    try {
+      const key = currentUser?.id ? `dashboard:dismissedActivityIds:${currentUser.id}` : null;
+      if (!key) return;
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        setDismissedActivityIds(JSON.parse(saved));
+      }
+    } catch (_) {
+      // ignore storage errors
+    }
+  }, [currentUser?.id]);
+
+  // Persist dismissed activities
+  useEffect(() => {
+    try {
+      const key = currentUser?.id ? `dashboard:dismissedActivityIds:${currentUser.id}` : null;
+      if (!key) return;
+      localStorage.setItem(key, JSON.stringify(dismissedActivityIds));
+    } catch (_) {
+      // ignore storage errors
+    }
+  }, [dismissedActivityIds, currentUser?.id]);
+
+  const dismissActivity = (id) => {
+    setDismissedActivityIds((prev) => Array.from(new Set([...(prev || []), id])));
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -571,13 +602,16 @@ const Dashboard = () => {
                     Recent Activities
                   </h2>
                   <div className="space-y-3">
-                    {dashboardData.recentActivity && dashboardData.recentActivity.slice(0, 5).map((activity, index) => (
+                    {dashboardData.recentActivity && dashboardData.recentActivity
+                      .filter((a) => !dismissedActivityIds.includes(a.id))
+                      .slice(0, 5)
+                      .map((activity, index) => (
                       <motion.div
                         key={index}
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.3, delay: 0.3 + (index * 0.1) }}
-                        className="flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300"
+                        className="relative flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300"
                       >
                         <div className={`p-1 rounded-full bg-${activity.type === 'thesis' ? 'blue' : 'green'}-100`}>
                           <DocumentTextIcon className={`h-4 w-4 text-${activity.type === 'thesis' ? 'blue' : 'green'}-600`} />
@@ -586,9 +620,17 @@ const Dashboard = () => {
                           <p className="text-sm font-medium text-gray-800">{activity.title}</p>
                           <p className="text-xs text-gray-500">{formatTimeAgo(activity.date)}</p>
                         </div>
+                        <button
+                          onClick={() => dismissActivity(activity.id)}
+                          className="absolute top-2 right-2 p-1 rounded-md hover:bg-gray-200 transition-colors"
+                          aria-label="Dismiss notification"
+                          title="Dismiss"
+                        >
+                          <XMarkIcon className="h-4 w-4 text-gray-500" />
+                        </button>
                       </motion.div>
                     ))}
-                    {(!dashboardData.recentActivity || dashboardData.recentActivity.length === 0) && (
+                    {(!dashboardData.recentActivity || dashboardData.recentActivity.filter((a) => !dismissedActivityIds.includes(a.id)).length === 0) && (
                       <p className="text-gray-500 text-center py-4">No recent activity</p>
                     )}
                   </div>
