@@ -520,12 +520,12 @@ const Dashboard = () => {
               </div>
             </motion.div>
 
-            {/* Upcoming Events - 2/3 width beside Quick Actions */}
+            {/* Upcoming Events - 1/3 width beside Quick Actions */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.25 }}
-              className="lg:col-span-2"
+              className="lg:col-span-1"
             >
               <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 h-full">
                 <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -557,17 +557,18 @@ const Dashboard = () => {
               </div>
             </motion.div>
 
-            {/* Recent Activity (hidden for advisers) */}
-            {currentUser?.role !== 'adviser' && (
+            {/* Recent Activities - third column for advisers (department uploads by students) */}
+            {currentUser?.role === 'adviser' && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
+                className="lg:col-span-1"
               >
                 <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 h-full">
                   <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                     <div className="w-1 h-6 bg-gradient-to-b from-purple-600 to-purple-400 rounded-full"></div>
-                    Recent Activity
+                    Recent Activities
                   </h2>
                   <div className="space-y-3">
                     {dashboardData.recentActivity && dashboardData.recentActivity.slice(0, 5).map((activity, index) => (

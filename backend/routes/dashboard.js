@@ -261,9 +261,36 @@ router.get('/activity', protect, async (req, res) => {
           role: user.role
         }))
       ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
+    } else if (userRole === 'adviser') {
+      // Adviser activity - recent student thesis uploads in the adviser's department
+      const { Op } = require('sequelize');
+      const recentDepartmentTheses = await Thesis.findAll({
+        where: {
+          department: req.user.department,
+          submitted_at: {
+            [Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          }
+        },
+        include: [{
+          model: User,
+          as: 'authors',
+          attributes: ['id', 'firstName', 'lastName', 'role'],
+          through: { attributes: [] },
+          where: { role: 'student' }
+        }],
+        order: [['submitted_at', 'DESC']],
+        limit: 10
+      });
+
+      activities = recentDepartmentTheses.map(thesis => ({
+        id: thesis.id,
+        type: 'thesis',
+        title: `New thesis uploaded: "${thesis.title}"`,
+        date: thesis.submitted_at || thesis.createdAt,
+        authors: Array.isArray(thesis.authors) ? thesis.authors.map(a => `${a.firstName} ${a.lastName}`) : []
+      }));
     } else {
-      // User activity - their own thesis submissions and status changes
-      const Op = require('sequelize').Op;
+      // Default user activity - their own theses updates
       const recentTheses = await Thesis.findAll({
         where: { adviser_id: userId },
         order: [['submitted_at', 'DESC']],
