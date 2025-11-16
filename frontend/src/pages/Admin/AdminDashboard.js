@@ -728,15 +728,14 @@ const AdminDashboard = () => {
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.3, delay: 0.4 + (index * 0.1) }}
-                      className="p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300 cursor-pointer"
-                      onClick={() => navigate(`/admin/thesis/${thesis.id}`)}
+                      className="p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 transition-all duration-300"
                     >
                       <p className="text-sm font-medium text-gray-800 mb-1 line-clamp-2">{thesis.title}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium bg-${getStatusColor(thesis.status)}-100 text-${getStatusColor(thesis.status)}-800`}>
                           {thesis.status}
                         </span>
-                        <span className="text-xs text-gray-500">{formatTimeAgo(thesis.submittedAt)}</span>
+                        <span className="text-xs text-gray-500">{formatTimeAgo(thesis.submitted_at || thesis.submittedAt)}</span>
                       </div>
                       <p className="text-xs text-gray-600 mt-1">by {thesis.author}</p>
                     </motion.div>
