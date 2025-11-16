@@ -13,7 +13,6 @@ const Settings = () => {
     firstName: '',
     lastName: '',
     email: '',
-    course: '',
   });
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
@@ -38,7 +37,6 @@ const Settings = () => {
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
-        course: user.course || '',
       });
       setPasswordResetEmail(user.email || '');
     }
@@ -54,7 +52,6 @@ const Settings = () => {
         firstName: accountData.firstName,
         lastName: accountData.lastName,
         email: accountData.email,
-        course: accountData.course,
       });
       setMessage('Account settings updated successfully.');
     } catch (error) {
@@ -178,17 +175,6 @@ const Settings = () => {
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Course (Program)</label>
-                  <input
-                    type="text"
-                    value={accountData.course}
-                    onChange={(e) => setAccountData({ ...accountData, course: e.target.value.toUpperCase() })}
-                    placeholder="e.g. BSIT"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Use course code such as BSIT, BSCS, etc.</p>
                 </div>
                 <div className="flex gap-4 pt-4">
                   <button
