@@ -602,9 +602,10 @@ router.get('/faculty/list', protect, async (req, res) => {
     const faculty = await User.findAll({
       where: {
         role: { [Op.in]: ['faculty', 'adviser', 'prof'] },
-        isActive: true
+        // Use correct column name from User model (is_active)
+        is_active: true
       },
-      attributes: ['id', 'firstName', 'lastName', 'email', 'department'],
+      attributes: ['id', 'firstName', 'lastName', 'email', 'department', 'role'],
       order: [['firstName', 'ASC'], ['lastName', 'ASC']]
     });
 
