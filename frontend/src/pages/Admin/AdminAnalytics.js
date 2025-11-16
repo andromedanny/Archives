@@ -12,7 +12,7 @@ const AdminAnalytics = () => {
     totalTheses: 0,
     totalUsers: 0,
     totalDownloads: 0,
-    monthlySubmissions: []
+    departmentStats: [],
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -22,18 +22,18 @@ const AdminAnalytics = () => {
         setIsLoading(true);
         const response = await adminAPI.getAnalytics();
         if (response.data.success) {
-          setAnalytics(response.data.data || {
-            totalTheses: 0,
-            totalUsers: 0,
+          setAnalytics({
+            totalTheses: response.data.data?.thesisSubmissions?.reduce((sum, item) => sum + (item.count || 0), 0) || 0,
+            totalUsers: response.data.data?.userRegistrations?.reduce((sum, item) => sum + (item.count || 0), 0) || 0,
             totalDownloads: 0,
-            monthlySubmissions: []
+            departmentStats: response.data.data?.departmentStats || [],
           });
         } else {
           setAnalytics({
             totalTheses: 0,
             totalUsers: 0,
             totalDownloads: 0,
-            monthlySubmissions: []
+            departmentStats: [],
           });
         }
       } catch (error) {
@@ -42,7 +42,7 @@ const AdminAnalytics = () => {
           totalTheses: 0,
           totalUsers: 0,
           totalDownloads: 0,
-          monthlySubmissions: []
+          departmentStats: [],
         });
         if (error.response?.status !== 401) {
           toast.error('Failed to load analytics');
@@ -120,93 +120,44 @@ const AdminAnalytics = () => {
                 <div className="text-sm text-gray-600 mt-1">Total Downloads</div>
               </motion.div>
               
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.4 }}
-                className="bg-gradient-to-br from-orange-50 to-orange-100 p-6 rounded-xl border border-orange-200 shadow-md hover:shadow-lg transition-shadow"
-              >
-                <div className="text-3xl font-bold text-orange-600">
-                  {analytics.totalUsers > 0 ? Math.round((analytics.totalUsers / analytics.totalUsers) * 100) : 0}%
-                </div>
-                <div className="text-sm text-gray-600 mt-1">Active Users</div>
-              </motion.div>
+              {/* Placeholder card slot removed for cleaner layout */}
             </div>
 
-            {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.5 }}
-                className="bg-white p-6 rounded-lg shadow-md"
-              >
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Monthly Submissions</h3>
-                <div className="space-y-3">
-                  {analytics.monthlySubmissions && analytics.monthlySubmissions.length > 0 ? (
-                    analytics.monthlySubmissions.map((item, index) => {
-                      const maxCount = Math.max(...analytics.monthlySubmissions.map(m => m.count), 1);
-                      return (
-                        <div key={item.month || index} className="flex items-center">
-                          <div className="w-12 text-sm text-gray-600">{item.month}</div>
-                          <div className="flex-1 mx-4">
-                            <div className="bg-gray-200 rounded-full h-2">
-                              <div 
-                                className="bg-blue-600 h-2 rounded-full" 
-                                style={{ width: `${(item.count / maxCount) * 100}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                          <div className="w-8 text-sm text-gray-600">{item.count}</div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <p className="text-gray-500 text-sm">No submission data available</p>
-                  )}
-                </div>
-              </motion.div>
-              
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.6 }}
-                className="bg-white p-6 rounded-lg shadow-md"
-              >
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Department Distribution</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Computer Science</span>
-                    <span className="text-sm font-medium">45%</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Information Technology</span>
-                    <span className="text-sm font-medium">35%</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Entertainment & Multimedia</span>
-                    <span className="text-sm font-medium">20%</span>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-
-            {/* Export Options */}
+            {/* Department-wise Thesis Submissions */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.7 }}
-              className="mt-8 flex gap-4"
+              transition={{ duration: 0.5, delay: 0.5 }}
+              className="mt-8 bg-white p-6 rounded-lg shadow-md"
             >
-              <button className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                Export PDF Report
-              </button>
-              <button className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-                Export Excel Data
-              </button>
-              <button className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
-                Generate Summary
-              </button>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Thesis Submissions by Department</h3>
+              <div className="space-y-3">
+                {analytics.departmentStats && analytics.departmentStats.length > 0 ? (
+                  (() => {
+                    const maxCount = Math.max(...analytics.departmentStats.map(d => d.totalTheses || 0), 1);
+                    return analytics.departmentStats.map((dept, index) => (
+                      <div key={dept._id || index} className="flex items-center">
+                        <div className="w-48 text-sm text-gray-700 truncate">
+                          {dept._id || 'Unknown Department'}
+                        </div>
+                        <div className="flex-1 mx-4">
+                          <div className="bg-gray-200 rounded-full h-3">
+                            <div
+                              className="bg-blue-600 h-3 rounded-full"
+                              style={{ width: `${(dept.totalTheses / maxCount) * 100}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                        <div className="w-16 text-sm text-gray-700 text-right">
+                          {dept.totalTheses || 0}
+                        </div>
+                      </div>
+                    ));
+                  })()
+                ) : (
+                  <p className="text-gray-500 text-sm">No department submission data available</p>
+                )}
+              </div>
             </motion.div>
           </motion.div>
         </div>
