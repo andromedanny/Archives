@@ -611,7 +611,7 @@ const Dashboard = () => {
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.3, delay: 0.3 + (index * 0.1) }}
-                        className="relative flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300"
+                        className="flex items-start gap-3 p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300"
                       >
                         <div className={`p-1 rounded-full bg-${activity.type === 'thesis' ? 'blue' : 'green'}-100`}>
                           <DocumentTextIcon className={`h-4 w-4 text-${activity.type === 'thesis' ? 'blue' : 'green'}-600`} />
@@ -622,7 +622,7 @@ const Dashboard = () => {
                         </div>
                         <button
                           onClick={() => dismissActivity(activity.id)}
-                          className="absolute top-2 right-2 p-1 rounded-md hover:bg-gray-200 transition-colors"
+                          className="ml-auto p-1 rounded-md hover:bg-gray-200 transition-colors self-start"
                           aria-label="Dismiss notification"
                           title="Dismiss"
                         >
