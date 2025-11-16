@@ -102,47 +102,26 @@ const ThesisCreate = () => {
       }
 
       try {
-        // Fetch users with adviser, faculty, or prof roles from the selected department
-        // Backend only accepts single role, so we fetch each role separately and combine
-        const [adviserResponse, facultyResponse, profResponse] = await Promise.all([
-          usersAPI.getUsers({
-            role: 'adviser',
-            department: formData.department,
-            limit: 100
-          }).catch(() => ({ data: { success: false, data: [] } })),
-          usersAPI.getUsers({
-            role: 'faculty',
-            department: formData.department,
-            limit: 100
-          }).catch(() => ({ data: { success: false, data: [] } })),
-          usersAPI.getUsers({
-            role: 'prof',
-            department: formData.department,
-            limit: 100
-          }).catch(() => ({ data: { success: false, data: [] } }))
-        ]);
+        // Use dedicated faculty/adviser list endpoint, then filter by department on the client
+        const response = await usersAPI.getFaculty().catch(() => ({ data: { success: false, data: [] } }));
 
-        // Combine all advisers from different roles and remove duplicates
-        const allAdvisers = [];
-        const seenIds = new Set();
+        const allUsers = response.data?.data || response.data || [];
 
-        [adviserResponse, facultyResponse, profResponse].forEach(response => {
-          if (response.data && response.data.success) {
-            const users = response.data.data || [];
-            users.forEach(user => {
-              if (!seenIds.has(user.id)) {
-                seenIds.add(user.id);
-                allAdvisers.push(user);
-              }
-            });
-          }
+        const normalize = (value) => (value || '').toString().trim().toLowerCase();
+        const targetDept = normalize(formData.department);
+
+        const filteredAdvisers = allUsers.filter((user) => {
+          const role = (user.role || '').toLowerCase();
+          const dept = normalize(user.department);
+          const isAdviserRole = role === 'adviser' || role === 'faculty' || role === 'prof';
+          return isAdviserRole && (!targetDept || dept === targetDept);
         });
 
-        setAdvisers(allAdvisers);
+        setAdvisers(filteredAdvisers);
         
         // Clear adviser selection if current adviser is not in the new department
         if (formData.adviserId) {
-          const currentAdviser = allAdvisers.find(a => a.id.toString() === formData.adviserId.toString());
+          const currentAdviser = filteredAdvisers.find(a => a.id.toString() === formData.adviserId.toString());
           if (!currentAdviser) {
             setFormData(prev => ({ ...prev, adviserId: '' }));
           }
