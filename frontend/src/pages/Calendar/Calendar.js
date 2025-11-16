@@ -207,7 +207,7 @@ const Calendar = () => {
                   right: 'dayGridMonth,timeGridWeek,timeGridDay'
                 }}
                 events={fetchEvents}
-                loading={isLoading}
+                loading={(loading) => setIsLoading(loading)}
                 eventClick={handleEventClick}
                 dateClick={handleDateClick}
                 editable={false}
