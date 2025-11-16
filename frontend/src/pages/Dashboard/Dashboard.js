@@ -610,7 +610,7 @@ const Dashboard = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.5 }}
-              className="lg:col-span-2"
+              className="md:col-span-2 lg:col-span-3"
             >
               <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 h-full">
                 <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
