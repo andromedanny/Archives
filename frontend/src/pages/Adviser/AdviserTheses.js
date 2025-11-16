@@ -124,6 +124,12 @@ const AdviserTheses = () => {
     }
   };
 
+  const isUnderReview = (status) => {
+    if (!status) return false;
+    const normalized = status.toLowerCase().replace(/\s+/g, ' ').trim();
+    return normalized === 'under review';
+  };
+
   const filteredTheses = theses.filter(thesis => {
     const matchesSearch = !searchTerm || 
       thesis.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -249,7 +255,7 @@ const AdviserTheses = () => {
                                 <EyeIcon className="h-4 w-4" />
                                 View
                               </button>
-                              {thesis.status === 'Under Review' && (
+                              {isUnderReview(thesis.status) && (
                                 <>
                                   <button
                                     onClick={() => handleApprove(thesis.id)}
