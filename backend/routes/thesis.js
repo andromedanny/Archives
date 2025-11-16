@@ -412,7 +412,6 @@ router.get('/:id/view', optionalAuth, async (req, res) => {
     // If path is a URL, redirect to it or proxy it
     if (filePath && (filePath.startsWith('http://') || filePath.startsWith('https://'))) {
       // Cloud storage URL - redirect to it
-      console.log('Redirecting to cloud storage URL:', filePath);
       return res.redirect(filePath);
     }
 
@@ -425,7 +424,6 @@ router.get('/:id/view', optionalAuth, async (req, res) => {
         // If file path is a storage path (not a full URL), try to get public URL
         const supabaseUrl = getFileUrl(filePath);
         if (supabaseUrl) {
-          console.log('File found in Supabase Storage, redirecting to:', supabaseUrl);
           return res.redirect(supabaseUrl);
         }
       }
@@ -571,7 +569,6 @@ router.get('/:id/download', optionalAuth, async (req, res) => {
     if (filePath && (filePath.startsWith('http://') || filePath.startsWith('https://'))) {
       // Cloud storage URL - redirect to it for download
       // Increment download count before redirecting
-      console.log('Redirecting to cloud storage URL for download:', filePath);
       await thesis.incrementDownloadCount();
       await logFileOperation(req, 'thesis.download', thesis.id, 'success');
       return res.redirect(filePath);
@@ -586,7 +583,6 @@ router.get('/:id/download', optionalAuth, async (req, res) => {
         // If file path is a storage path (not a full URL), try to get public URL
         const supabaseUrl = getFileUrl(filePath);
         if (supabaseUrl) {
-          console.log('File found in Supabase Storage, redirecting to:', supabaseUrl);
           await thesis.incrementDownloadCount();
           await logFileOperation(req, 'thesis.download', thesis.id, 'success');
           return res.redirect(supabaseUrl);
@@ -729,19 +725,9 @@ router.post('/:id/document', protect, uploadThesisDocument, handleUploadError, a
     const storageType = process.env.STORAGE_TYPE || 'local';
     let fileInfo;
     
-    console.log('File upload - Storage type:', storageType);
-    console.log('File upload - File info:', {
-      originalName: req.file.originalname,
-      filename: req.file.filename,
-      size: req.file.size,
-      mimetype: req.file.mimetype,
-      path: req.file.path
-    });
-    
     if (storageType === 'supabase') {
       // Check if Supabase is configured
       const { isConfigured } = require('../config/supabaseStorage');
-      console.log('Supabase Storage configured:', isConfigured());
       
       if (!isConfigured()) {
         console.error('⚠️ Supabase Storage is not configured. Falling back to local storage.');
@@ -755,15 +741,9 @@ router.post('/:id/document', protect, uploadThesisDocument, handleUploadError, a
         fileInfo = getFileInfo(req.file);
       } else {
         // Upload to Supabase Storage
-        console.log('✅ Uploading to Supabase Storage...');
         const { uploadFile: uploadToCloud } = require('../config/cloudStorage');
         try {
           fileInfo = await uploadToCloud(req.file, 'thesis/documents');
-          console.log('✅ Supabase upload successful:', {
-            filename: fileInfo.filename,
-            url: fileInfo.url,
-            path: fileInfo.path
-          });
           // fileInfo.url contains the public URL
           // fileInfo.path contains the storage path
           // Store the URL in the database for Supabase
@@ -779,7 +759,6 @@ router.post('/:id/document', protect, uploadThesisDocument, handleUploadError, a
       }
     } else {
       // Local storage - get file info (includes checksum for integrity verification - Objective 1.4)
-      console.log('Using local storage (STORAGE_TYPE=' + storageType + ')');
       fileInfo = getFileInfo(req.file);
     }
 
@@ -998,7 +977,6 @@ router.post('/', protect, [
           user_id: { [Op.in]: authorIds }
         }
       });
-      console.log('Author relationship verified - count:', authorCount);
     } catch (authorError) {
       console.error('Error adding author:', authorError);
       console.error('Author error stack:', authorError.stack);

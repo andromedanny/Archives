@@ -16,16 +16,11 @@ const MyTheses = () => {
   const fetchTheses = async () => {
     try {
       setIsLoading(true);
-      console.log('Fetching my theses...');
       const response = await thesisAPI.getMyTheses();
-      console.log('My theses response:', response.data);
       if (response.data && response.data.success) {
         const thesesData = response.data.data || [];
-        console.log('Setting theses:', thesesData.length, 'items');
-        console.log('Thesis titles:', thesesData.map(t => t.title));
         setTheses(thesesData);
       } else {
-        console.log('Response was not successful:', response.data);
         setTheses([]);
         if (response.data && response.data.message) {
           toast.error(response.data.message);

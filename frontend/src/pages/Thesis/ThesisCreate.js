@@ -64,12 +64,8 @@ const ThesisCreate = () => {
           })
         ]);
 
-        console.log('Departments response:', deptsResponse.data);
-        console.log('Courses response:', coursesResponse.data);
-
         if (deptsResponse.data && deptsResponse.data.success) {
           setDepartments(deptsResponse.data.data || []);
-          console.log('Departments set:', deptsResponse.data.data);
         } else {
           console.error('Departments API failed:', deptsResponse.data);
           toast.error('Failed to load departments');
@@ -77,7 +73,6 @@ const ThesisCreate = () => {
         
         if (coursesResponse.data && coursesResponse.data.success) {
           setCourses(coursesResponse.data.data || []);
-          console.log('Courses set:', coursesResponse.data.data);
         } else {
           console.error('Courses API failed:', coursesResponse.data);
         }
@@ -195,7 +190,6 @@ const ThesisCreate = () => {
   const loadCoAuthorCandidates = async (query = '') => {
     try {
       setIsSearchingAuthors(true);
-      console.log('[CoAuthor] Loading candidates', { query });
       const params = { 
         limit: 50,
         role: 'student'
@@ -203,9 +197,7 @@ const ThesisCreate = () => {
       // Department/course filtering is handled client-side for compatibility
       if (query.trim()) params.search = query.trim();
       const response = await usersAPI.getUsers(params);
-      console.log('[CoAuthor] API response', response);
       const users = response.data?.data || response.data || [];
-      console.log('[CoAuthor] Raw users', users);
 
       const normalize = (value, options = {}) => {
         if (!value) return '';
@@ -247,18 +239,15 @@ const ThesisCreate = () => {
         const candidateCourseNorm = normalize(candidateCourseRaw, { removeSpaces: true, removeDashes: true });
 
         if (userDeptNorm && candidateDeptNorm && candidateDeptNorm !== userDeptNorm) {
-          console.log('[CoAuthor] Filtering out due to department mismatch', { candidate: candidateDeptRaw, candidateDeptNorm, userDeptNorm });
           return false;
         }
 
         if (userCourseNorm && candidateCourseNorm && candidateCourseNorm !== userCourseNorm) {
-          console.log('[CoAuthor] Filtering out due to course mismatch', { candidateCourseRaw, candidateCourseNorm, userCourseNorm });
           return false;
         }
 
         return !coAuthors.some((author) => author.id === candidate.id);
       });
-      console.log('[CoAuthor] Filtered users', filtered);
       setSearchResults(filtered);
     } catch (error) {
       console.error('Error loading potential co-authors:', error);
@@ -271,7 +260,6 @@ const ThesisCreate = () => {
   };
 
   const openAuthorSearch = () => {
-    console.log('[CoAuthor] Toggle author search');
     if (!showAuthorSearch) {
       setSearchQuery('');
       setSearchResults([]);
@@ -292,7 +280,6 @@ const ThesisCreate = () => {
 
   const handleSearchAuthors = async (query) => {
     setSearchQuery(query);
-    console.log('[CoAuthor] Searching authors', query);
     try {
       await loadCoAuthorCandidates(query);
     } catch (error) {
@@ -300,9 +287,6 @@ const ThesisCreate = () => {
     }
   };
 
-  useEffect(() => {
-    console.log('[CoAuthor] showAuthorSearch changed:', showAuthorSearch);
-  }, [showAuthorSearch]);
 
   const handleAddCoAuthor = (candidate) => {
     if (!candidate || coAuthors.some((author) => author.id === candidate.id) || candidate.id === user?.id) {

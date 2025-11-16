@@ -81,7 +81,6 @@ export const AuthProvider = ({ children }) => {
           const authPromise = authAPI.getMe();
           
           const response = await Promise.race([authPromise, timeoutPromise]);
-          console.log('Auth check: Backend verification successful');
           dispatch({
             type: 'AUTH_SUCCESS',
             payload: {
@@ -93,7 +92,6 @@ export const AuthProvider = ({ children }) => {
           localStorage.setItem('user', JSON.stringify(response.data.user));
         } catch (error) {
           // If backend verification fails (network error, timeout, etc.), use cached user data
-          console.log('Auth check: Backend verification failed, using cached user data', error.message);
           try {
             const parsedUser = JSON.parse(user);
             // Only use cached data if it's valid
@@ -136,7 +134,6 @@ export const AuthProvider = ({ children }) => {
           }
         }
       } else {
-        console.log('Auth check: No token or user found');
         dispatch({ type: 'AUTH_FAILURE', payload: null });
       }
     };
@@ -147,10 +144,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (credentials) => {
     dispatch({ type: 'AUTH_START' });
     try {
-      console.log('Login attempt:', { email: credentials.email });
       const response = await authAPI.login(credentials);
-      console.log('Login response:', response.data);
-      
       const { user, token } = response.data;
 
       if (!user || !token) {

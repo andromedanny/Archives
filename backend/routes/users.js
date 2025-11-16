@@ -452,7 +452,6 @@ router.delete('/:id', protect, async (req, res) => {
     // If force delete, delete all theses first
     if (thesisCount > 0 && forceDelete) {
       try {
-        console.log('Force deleting theses for user:', userId);
         // Delete all theses where this user is an author
         for (const thesisId of userTheses) {
           try {

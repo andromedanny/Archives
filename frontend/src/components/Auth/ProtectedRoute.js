@@ -13,19 +13,8 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const hasToken = !!token;
   const hasStoredUser = !!storedUser;
 
-  console.log('ProtectedRoute:', { 
-    path: location.pathname, 
-    isAuthenticated, 
-    isLoading, 
-    userRole: user?.role, 
-    allowedRoles,
-    hasToken,
-    hasStoredUser
-  });
-
   // If still loading authentication state, show spinner
   if (isLoading) {
-    console.log('ProtectedRoute: Still loading, showing spinner');
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner size="lg" />
@@ -39,19 +28,16 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const justLoggedIn = sessionStorage.getItem('justLoggedIn') === 'true';
   
   if (!isAuthenticated && hasToken && hasStoredUser && !isLoading) {
-    console.log('ProtectedRoute: Using stored authentication data (login just completed)', { justLoggedIn });
     try {
       const parsedUser = JSON.parse(storedUser);
       // Allow access if no role restriction or role matches
       if (allowedRoles.length === 0 || allowedRoles.includes(parsedUser.role)) {
-        console.log('ProtectedRoute: Allowing access based on stored credentials', { role: parsedUser.role });
         // Clear the justLoggedIn flag after successful access
         if (justLoggedIn) {
           setTimeout(() => sessionStorage.removeItem('justLoggedIn'), 1000);
         }
         return children;
       } else {
-        console.log('ProtectedRoute: Role mismatch', { userRole: parsedUser.role, allowedRoles });
         return (
           <div className="min-h-screen flex items-center justify-center">
             <div className="text-center">
@@ -67,7 +53,6 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
       console.error('Error parsing stored user:', e);
       // If we can't parse user and we just logged in, give it another moment
       if (justLoggedIn) {
-        console.log('ProtectedRoute: Just logged in, showing loading while parsing');
         return (
           <div className="min-h-screen flex items-center justify-center">
             <LoadingSpinner size="lg" />
@@ -85,7 +70,6 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   if (isAuthenticated) {
     // Check role if required
     if (allowedRoles.length > 0 && user && !allowedRoles.includes(user.role)) {
-      console.log('ProtectedRoute: Role check failed', { userRole: user.role, allowedRoles });
       return (
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
@@ -121,19 +105,16 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
         </div>
       );
     }
-    console.log('ProtectedRoute: Access granted, rendering children');
     return children;
   }
 
   // If not authenticated and no token, redirect to login
   if (!isAuthenticated && !hasToken) {
-    console.log('ProtectedRoute: Not authenticated, redirecting to login');
     return <Navigate to="/auth/login" state={{ from: location }} replace />;
   }
   
   // Fallback: if we have token but not authenticated, show loading
   if (hasToken && !isAuthenticated) {
-    console.log('ProtectedRoute: Has token but not authenticated, showing loading');
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner size="lg" />
@@ -142,7 +123,6 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   }
 
   // Should not reach here, but just in case
-  console.log('ProtectedRoute: Unexpected state, redirecting to login');
   return <Navigate to="/auth/login" state={{ from: location }} replace />;
 };
 

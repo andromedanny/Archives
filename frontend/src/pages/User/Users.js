@@ -47,13 +47,11 @@ const Users = () => {
 
   const handleEdit = (userId) => {
     // Navigate to edit user page
-    console.log('Edit user:', userId);
   };
 
   const handleDelete = (userId) => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       // Handle deletion
-      console.log('Delete user:', userId);
     }
   };
 

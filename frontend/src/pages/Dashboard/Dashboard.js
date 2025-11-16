@@ -41,7 +41,6 @@ const Dashboard = () => {
   const [dismissedActivityIds, setDismissedActivityIds] = useState([]);
 
   useEffect(() => {
-    console.log('Dashboard: Component mounted, fetching data...');
     fetchDashboardData();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -55,9 +54,6 @@ const Dashboard = () => {
     return () => window.removeEventListener('error', handleError);
   }, []);
 
-  useEffect(() => {
-    console.log('Dashboard state:', { isLoading, error, hasData: !!dashboardData.stats });
-  }, [isLoading, error, dashboardData]);
 
   // Helper to generate a stable key for an activity
   const getActivityKey = (activity) => {
@@ -98,7 +94,6 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      console.log('Dashboard: Starting to fetch data...');
       setIsLoading(true);
       setError(null);
 
@@ -122,7 +117,6 @@ const Dashboard = () => {
         upcomingEvents: events,
         departmentStats: {}
       });
-      console.log('Dashboard: Data loaded successfully');
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       setError('Failed to load dashboard data');
@@ -138,7 +132,6 @@ const Dashboard = () => {
         toast.error('Failed to load dashboard data');
       }
     } finally {
-      console.log('Dashboard: Setting isLoading to false');
       setIsLoading(false);
     }
   };
@@ -402,7 +395,6 @@ const Dashboard = () => {
   };
 
   if (isLoading) {
-    console.log('Dashboard: Showing loading state');
     return (
       <>
         <BackgroundImage />
@@ -434,12 +426,6 @@ const Dashboard = () => {
     );
   }
 
-  console.log('Dashboard: Rendering main content', { 
-    currentUser, 
-    dashboardData: Object.keys(dashboardData),
-    statsCount: Object.keys(dashboardData.stats || {}).length 
-  });
-  
   return (
     <>
       <Helmet>

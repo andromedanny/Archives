@@ -77,7 +77,6 @@ const AdminDepartments = () => {
   };
 
   const handleAddNew = () => {
-    console.log('Add New Department clicked');
     setEditingDepartment(null);
     setFormData({
       name: '',
@@ -88,7 +87,6 @@ const AdminDepartments = () => {
       isActive: true
     });
     setShowAddModal(true);
-    console.log('showAddModal set to true');
   };
 
   const handleSave = async () => {
@@ -257,7 +255,6 @@ const AdminDepartments = () => {
       <Footer />
 
       {/* Add Department Modal */}
-      {console.log('showAddModal state:', showAddModal)}
       {showAddModal && (
         <div 
           style={{

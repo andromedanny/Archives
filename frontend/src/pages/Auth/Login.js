@@ -24,9 +24,7 @@ const Login = () => {
     e.preventDefault();
     setError('');
 
-    console.log('Login form submitted:', { email: formData.email });
     const result = await login(formData);
-    console.log('Login result:', result);
     
     if (result.success) {
       // Wait longer for state to update and context to initialize
@@ -44,14 +42,11 @@ const Login = () => {
       
       try {
         const user = result.user || JSON.parse(storedUser);
-        console.log('Redirecting user:', user);
         
         // Redirect based on user role
         if (user?.role === 'admin') {
-          console.log('Navigating to /admin');
           navigate('/admin', { replace: true });
         } else {
-          console.log('Navigating to /dashboard');
           navigate('/dashboard', { replace: true });
         }
       } catch (err) {

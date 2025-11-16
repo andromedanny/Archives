@@ -140,7 +140,6 @@ const AdminTheses = () => {
   };
 
   const handleAddNew = () => {
-    console.log('Add Old Thesis clicked - opening modal');
     setEditingThesis(null);
     setFormData({
       title: '',
@@ -693,7 +692,6 @@ const AdminTheses = () => {
                 </h2>
                 <button
                   onClick={() => {
-                    console.log('Closing modal');
                     setShowEditModal(false);
                     setShowAddModal(false);
                     setEditingThesis(null);
