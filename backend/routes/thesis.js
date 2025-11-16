@@ -384,10 +384,15 @@ router.get('/:id/view', optionalAuth, async (req, res) => {
         const authorIds = thesis.authors.map(a => a.id);
         const isAuthor = authorIds.includes(req.user.id);
         
-        // Check if user is the adviser
-        const isAdviser = thesis.adviser_id === req.user.id;
+        // Check if user is the assigned adviser
+        const isAssignedAdviser = thesis.adviser_id === req.user.id;
         
-        if (!isAuthor && !isAdviser) {
+        // Check if user is an adviser from the same department
+        const isDepartmentAdviser = req.user.role === 'adviser' && 
+                                    req.user.department && 
+                                    thesis.department === req.user.department;
+        
+        if (!isAuthor && !isAssignedAdviser && !isDepartmentAdviser) {
           return res.status(403).json({
             success: false,
             message: 'Access denied. This thesis is not publicly available.'
@@ -545,10 +550,15 @@ router.get('/:id/download', optionalAuth, async (req, res) => {
         const authorIds = thesis.authors.map(a => a.id);
         const isAuthor = authorIds.includes(req.user.id);
         
-        // Check if user is the adviser
-        const isAdviser = thesis.adviser_id === req.user.id;
+        // Check if user is the assigned adviser
+        const isAssignedAdviser = thesis.adviser_id === req.user.id;
         
-        if (!isAuthor && !isAdviser) {
+        // Check if user is an adviser from the same department
+        const isDepartmentAdviser = req.user.role === 'adviser' && 
+                                    req.user.department && 
+                                    thesis.department === req.user.department;
+        
+        if (!isAuthor && !isAssignedAdviser && !isDepartmentAdviser) {
           return res.status(403).json({
             success: false,
             message: 'Access denied. This thesis is not publicly available.'
@@ -870,10 +880,15 @@ router.get('/:id', optionalAuth, async (req, res) => {
         const authorIds = thesis.authors.map(a => a.id);
         const isAuthor = authorIds.includes(req.user.id);
         
-        // Check if user is the adviser
-        const isAdviser = thesis.adviser_id === req.user.id;
+        // Check if user is the assigned adviser
+        const isAssignedAdviser = thesis.adviser_id === req.user.id;
         
-        if (!isAuthor && !isAdviser) {
+        // Check if user is an adviser from the same department
+        const isDepartmentAdviser = req.user.role === 'adviser' && 
+                                    req.user.department && 
+                                    thesis.department === req.user.department;
+        
+        if (!isAuthor && !isAssignedAdviser && !isDepartmentAdviser) {
           return res.status(403).json({
             success: false,
             message: 'Access denied. This thesis is not publicly available.'

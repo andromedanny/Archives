@@ -88,17 +88,22 @@ const AdviserTheses = () => {
     }
   };
 
-  const handleViewPDF = (thesisId) => {
+  const handleViewPDF = async (thesisId) => {
     try {
+      // Use the API service to get the document URL with proper authentication
       const baseURL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) 
         ? import.meta.env.VITE_API_URL 
         : '/api';
       const token = localStorage.getItem('token');
+      
+      // Construct URL with token in query parameter for direct navigation
+      // The backend's optionalAuth middleware will check both headers and query params
       const pdfUrl = token 
         ? `${baseURL}/thesis/${thesisId}/view?token=${token}` 
         : `${baseURL}/thesis/${thesisId}/view`;
       
-      window.location.href = pdfUrl;
+      // Open in new tab/window
+      window.open(pdfUrl, '_blank');
     } catch (error) {
       console.error('Error opening PDF:', error);
       toast.error('Failed to open PDF. Please try again.');
