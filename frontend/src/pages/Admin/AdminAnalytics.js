@@ -11,7 +11,6 @@ const AdminAnalytics = () => {
   const [analytics, setAnalytics] = useState({
     totalTheses: 0,
     totalUsers: 0,
-    totalDownloads: 0,
     departmentStats: [],
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -23,16 +22,14 @@ const AdminAnalytics = () => {
         const response = await adminAPI.getAnalytics();
         if (response.data.success) {
           setAnalytics({
-            totalTheses: response.data.data?.thesisSubmissions?.reduce((sum, item) => sum + (item.count || 0), 0) || 0,
-            totalUsers: response.data.data?.userRegistrations?.reduce((sum, item) => sum + (item.count || 0), 0) || 0,
-            totalDownloads: 0,
+            totalTheses: response.data.data?.totalTheses || 0,
+            totalUsers: response.data.data?.totalUsers || 0,
             departmentStats: response.data.data?.departmentStats || [],
           });
         } else {
           setAnalytics({
             totalTheses: 0,
             totalUsers: 0,
-            totalDownloads: 0,
             departmentStats: [],
           });
         }
@@ -41,7 +38,6 @@ const AdminAnalytics = () => {
         setAnalytics({
           totalTheses: 0,
           totalUsers: 0,
-          totalDownloads: 0,
           departmentStats: [],
         });
         if (error.response?.status !== 401) {
@@ -89,7 +85,7 @@ const AdminAnalytics = () => {
             <h1 className="text-3xl font-bold text-gray-800 mb-8">Analytics Dashboard</h1>
             
             {/* Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -109,53 +105,63 @@ const AdminAnalytics = () => {
                 <div className="text-3xl font-bold text-green-600">{analytics.totalUsers}</div>
                 <div className="text-sm text-gray-600 mt-1">Total Users</div>
               </motion.div>
-              
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.3 }}
-                className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-xl border border-purple-200 shadow-md hover:shadow-lg transition-shadow"
-              >
-                <div className="text-3xl font-bold text-purple-600">{analytics.totalDownloads}</div>
-                <div className="text-sm text-gray-600 mt-1">Total Downloads</div>
-              </motion.div>
-              
-              {/* Placeholder card slot removed for cleaner layout */}
             </div>
 
-            {/* Department-wise Thesis Submissions */}
+            {/* Department Statistics with Users and Theses */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.5 }}
               className="mt-8 bg-white p-6 rounded-lg shadow-md"
             >
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Thesis Submissions by Department</h3>
-              <div className="space-y-3">
+              <h3 className="text-lg font-semibold text-gray-800 mb-6">Thesis Submissions</h3>
+              <div className="space-y-6">
                 {analytics.departmentStats && analytics.departmentStats.length > 0 ? (
                   (() => {
-                    const maxCount = Math.max(...analytics.departmentStats.map(d => d.totalTheses || 0), 1);
+                    const maxTheses = Math.max(...analytics.departmentStats.map(d => d.totalTheses || 0), 1);
+                    const maxUsers = Math.max(...analytics.departmentStats.map(d => d.totalUsers || 0), 1);
                     return analytics.departmentStats.map((dept, index) => (
-                      <div key={dept._id || index} className="flex items-center">
-                        <div className="w-48 text-sm text-gray-700 truncate">
-                          {dept._id || 'Unknown Department'}
-                        </div>
-                        <div className="flex-1 mx-4">
-                          <div className="bg-gray-200 rounded-full h-3">
-                            <div
-                              className="bg-blue-600 h-3 rounded-full"
-                              style={{ width: `${(dept.totalTheses / maxCount) * 100}%` }}
-                            ></div>
+                      <div key={dept.department || index} className="space-y-2">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-sm font-semibold text-gray-800">
+                            {dept.department || 'Unknown Department'}
                           </div>
                         </div>
-                        <div className="w-16 text-sm text-gray-700 text-right">
-                          {dept.totalTheses || 0}
+                        
+                        {/* Total Theses Bar */}
+                        <div className="flex items-center">
+                          <div className="w-32 text-xs text-gray-600">Theses:</div>
+                          <div className="flex-1 mx-4">
+                            <div className="bg-gray-200 rounded-full h-4">
+                              <div
+                                className="bg-blue-600 h-4 rounded-full flex items-center justify-end pr-2"
+                                style={{ width: `${Math.min((dept.totalTheses / maxTheses) * 100, 100)}%` }}
+                              >
+                                <span className="text-xs text-white font-medium">{dept.totalTheses || 0}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Total Users Bar */}
+                        <div className="flex items-center">
+                          <div className="w-32 text-xs text-gray-600">Users:</div>
+                          <div className="flex-1 mx-4">
+                            <div className="bg-gray-200 rounded-full h-4">
+                              <div
+                                className="bg-green-600 h-4 rounded-full flex items-center justify-end pr-2"
+                                style={{ width: `${Math.min((dept.totalUsers / maxUsers) * 100, 100)}%` }}
+                              >
+                                <span className="text-xs text-white font-medium">{dept.totalUsers || 0}</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ));
                   })()
                 ) : (
-                  <p className="text-gray-500 text-sm">No department submission data available</p>
+                  <p className="text-gray-500 text-sm">No department data available</p>
                 )}
               </div>
             </motion.div>

@@ -171,121 +171,61 @@ router.get('/analytics', [
       });
     }
 
-    const period = req.query.period || '30d';
-    const days = {
-      '7d': 7,
-      '30d': 30,
-      '90d': 90,
-      '1y': 365
-    }[period];
-
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-
-    // User registrations over time
-    const userRegistrations = await User.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate }
-        }
-      },
-      {
-        $group: {
-          _id: {
-            year: { $year: '$createdAt' },
-            month: { $month: '$createdAt' },
-            day: { $dayOfMonth: '$createdAt' }
-          },
-          count: { $sum: 1 }
-        }
-      },
-      {
-        $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 }
-      }
-    ]);
-
-    // Thesis submissions over time
-    const thesisSubmissions = await Thesis.aggregate([
-      {
-        $match: {
-          submittedAt: { $gte: startDate }
-        }
-      },
-      {
-        $group: {
-          _id: {
-            year: { $year: '$submittedAt' },
-            month: { $month: '$submittedAt' },
-            day: { $dayOfMonth: '$submittedAt' }
-          },
-          count: { $sum: 1 }
-        }
-      },
-      {
-        $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 }
-      }
-    ]);
-
-    // Department statistics
-    const departmentStats = await Thesis.aggregate([
-      {
-        $group: {
-          _id: '$department',
-          totalTheses: { $sum: 1 },
-          publishedTheses: {
-            $sum: { $cond: [{ $eq: ['$status', 'Published'] }, 1, 0] }
-          }
-        }
-      },
-      {
-        $sort: { totalTheses: -1 }
-      }
-    ]);
-
-    // Most downloaded theses
-    const topDownloads = await Thesis.findAll({
-      where: { status: 'Published' },
-      include: [{
-        model: User,
-        as: 'authors',
-        attributes: ['firstName', 'lastName'],
-        through: { attributes: [] }
-      }],
-      order: [['download_count', 'DESC']],
-      limit: 10,
-      attributes: ['id', 'title', 'download_count', 'view_count']
+    // Get all departments
+    const departments = await Department.findAll({
+      where: { is_active: true },
+      attributes: ['id', 'name']
     });
 
-    // Most viewed theses
-    const topViews = await Thesis.findAll({
-      where: { status: 'Published' },
-      include: [{
-        model: User,
-        as: 'authors',
-        attributes: ['firstName', 'lastName'],
-        through: { attributes: [] }
-      }],
-      order: [['view_count', 'DESC']],
-      limit: 10,
-      attributes: ['id', 'title', 'download_count', 'view_count']
-    });
+    // Get department statistics with user and thesis counts
+    const departmentStats = await Promise.all(
+      departments.map(async (dept) => {
+        const [totalUsers, totalTheses] = await Promise.all([
+          User.count({
+            where: {
+              department: dept.name,
+              is_active: true
+            }
+          }),
+          Thesis.count({
+            where: {
+              department: dept.name
+            }
+          })
+        ]);
+
+        return {
+          department: dept.name,
+          totalUsers,
+          totalTheses
+        };
+      })
+    );
+
+    // Sort by total theses descending
+    departmentStats.sort((a, b) => b.totalTheses - a.totalTheses);
+
+    // Get overall statistics
+    const [totalTheses, totalUsers] = await Promise.all([
+      Thesis.count(),
+      User.count({ where: { is_active: true } })
+    ]);
 
     res.json({
       success: true,
       data: {
-        period,
-        userRegistrations,
-        thesisSubmissions,
-        departmentStats,
-        topDownloads,
-        topViews
+        totalTheses,
+        totalUsers,
+        departmentStats
       }
     });
   } catch (error) {
     console.error('Get analytics error:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
