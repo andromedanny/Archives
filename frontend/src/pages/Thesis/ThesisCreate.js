@@ -382,7 +382,7 @@ const ThesisCreate = () => {
   return (
     <>
       <Helmet>
-        <title>Create Thesis - FAITH Colleges Thesis Archive</title>
+        <title>Submit Thesis - FAITH Colleges Thesis Archive</title>
         <meta name="description" content="Submit a new thesis to the archive" />
       </Helmet>
       
@@ -397,7 +397,7 @@ const ThesisCreate = () => {
             transition={{ duration: 0.5 }}
             className="bg-white p-8 rounded-xl shadow-lg border border-gray-100"
           >
-            <h1 className="text-3xl font-bold text-gray-800 mb-8">Create New Thesis</h1>
+            <h1 className="text-3xl font-bold text-gray-800 mb-8">Submit New Thesis</h1>
             
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
@@ -674,7 +674,7 @@ const ThesisCreate = () => {
                   disabled={isSubmitting}
                   className="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                 >
-                  {isSubmitting ? 'Creating...' : 'Create Thesis'}
+                  {isSubmitting ? 'Submitting...' : 'Submit Thesis'}
                 </button>
                 <button
                   type="button"

@@ -230,11 +230,11 @@ router.get('/analytics', [
   }
 });
 
-// @desc    Review thesis
+// @desc    Review thesis (Admin can only publish already-approved theses or reject)
 // @route   PUT /api/admin/thesis/:id/review
 // @access  Private (Admin)
 router.put('/thesis/:id/review', [
-  body('status').isIn(['Approved', 'Rejected']).withMessage('Status must be Approved or Rejected'),
+  body('status').isIn(['Published', 'Rejected']).withMessage('Status must be Published or Rejected. Admins cannot approve theses - only advisers can approve.'),
   body('comments').optional().trim(),
   body('score').optional().isInt({ min: 0, max: 100 }).withMessage('Score must be between 0 and 100')
 ], async (req, res) => {
@@ -248,7 +248,22 @@ router.put('/thesis/:id/review', [
       });
     }
 
-    const thesis = await Thesis.findById(req.params.id);
+    const thesis = await Thesis.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+          through: { attributes: [] }
+        },
+        {
+          model: User,
+          as: 'adviser',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+          required: false
+        }
+      ]
+    });
 
     if (!thesis) {
       return res.status(404).json({
@@ -259,28 +274,54 @@ router.put('/thesis/:id/review', [
 
     const { status, comments, score } = req.body;
 
-    // Update thesis review
-    thesis.status = status;
-    thesis.review = {
-      reviewer: req.user.id,
-      comments,
-      score,
-      reviewedAt: new Date()
-    };
+    // Admins can only publish theses that have been approved by an adviser
+    if (status === 'Published') {
+      if (thesis.status !== 'Approved') {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot publish thesis. Only theses that have been approved by an adviser can be published. Current status: ' + thesis.status
+        });
+      }
 
-    if (status === 'Approved') {
-      thesis.isPublic = true;
-      thesis.publishedAt = new Date();
+      // Update thesis to published
+      await thesis.update({
+        status: 'Published',
+        is_public: true,
+        published_at: new Date(),
+        reviewer_id: req.user.id,
+        review_comments: comments || null,
+        review_score: score || null,
+        reviewed_at: new Date()
+      });
+    } else if (status === 'Rejected') {
+      // Admins can reject theses (even if approved by adviser)
+      await thesis.update({
+        status: 'Rejected',
+        is_public: false,
+        reviewer_id: req.user.id,
+        review_comments: comments || null,
+        review_score: score || null,
+        reviewed_at: new Date()
+      });
     }
 
-    await thesis.save();
-
-    // Populate the updated thesis
-    await thesis.populate([
-      { path: 'authors', select: 'firstName lastName email' },
-      { path: 'adviser', select: 'firstName lastName email' },
-      { path: 'review.reviewer', select: 'firstName lastName' }
-    ]);
+    // Reload thesis with associations
+    await thesis.reload({
+      include: [
+        {
+          model: User,
+          as: 'authors',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+          through: { attributes: [] }
+        },
+        {
+          model: User,
+          as: 'adviser',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+          required: false
+        }
+      ]
+    });
 
     res.json({
       success: true,
@@ -291,7 +332,8 @@ router.put('/thesis/:id/review', [
     console.error('Review thesis error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

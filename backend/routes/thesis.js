@@ -53,8 +53,13 @@ router.get('/', [
           department: req.user.department,
           status: 'Approved'
         });
+      } else if (req.user.role === 'student') {
+        // Students can only see their own draft theses
+        // We'll filter by author in the include/query, but for now restrict to Draft status
+        // The actual author filtering will be done after fetching
+        conditions.push({ status: 'Draft' });
       } else {
-        // Other users see:
+        // Other users (faculty, admin) see:
         // 1. All published public theses (from any department)
         // 2. All theses from user's department (regardless of status or is_public)
         conditions.push({
@@ -173,22 +178,34 @@ router.get('/', [
     const sortOrder = req.query.sortOrder === 'asc' ? 'ASC' : 'DESC';
     const order = [[sortBy, sortOrder]];
 
+    // For students, we need to filter by author - add this to the include condition
+    let includeConditions = [
+      {
+        model: User,
+        as: 'authors',
+        attributes: ['id', 'firstName', 'lastName'],
+        through: { attributes: [] }
+      },
+      {
+        model: User,
+        as: 'adviser',
+        attributes: ['id', 'firstName', 'lastName']
+      }
+    ];
+
+    // If user is a student, only show theses where they are an author
+    if (req.user && req.user.role === 'student') {
+      includeConditions[0] = {
+        ...includeConditions[0],
+        where: { id: req.user.id },
+        required: true // INNER JOIN - only theses where this student is an author
+      };
+    }
+
     // Execute query
     const { count, rows: theses } = await Thesis.findAndCountAll({
       where,
-      include: [
-        {
-          model: User,
-          as: 'authors',
-          attributes: ['id', 'firstName', 'lastName'],
-          through: { attributes: [] }
-        },
-        {
-          model: User,
-          as: 'adviser',
-          attributes: ['id', 'firstName', 'lastName']
-        }
-      ],
+      include: includeConditions,
       order,
       limit,
       offset,
@@ -372,18 +389,31 @@ router.get('/:id/view', optionalAuth, async (req, res) => {
     }
 
     // Check if user can view this thesis
-    // Public theses with Published status can be viewed by anyone
+    // Students can only view their own draft theses
+    // Public theses with Published status can be viewed by anyone (except students)
     // Private theses or non-published theses require authentication
     // Admins and advisers can view all theses they have access to
-    if (!thesis.is_public || thesis.status !== 'Published') {
+    
+    // Check if user is author
+    const authorIds = thesis.authors.map(a => a.id);
+    const isAuthor = req.user && authorIds.includes(req.user.id);
+    
+    // Students can only view their own draft theses
+    if (req.user && req.user.role === 'student') {
+      if (!isAuthor || thesis.status !== 'Draft') {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. Students can only view their own draft theses.'
+        });
+      }
+      // Allow access - student is viewing their own draft
+    } else if (!thesis.is_public || thesis.status !== 'Published') {
+      // For non-students: Public theses with Published status can be viewed by anyone
+      // Private theses or non-published theses require authentication
       // Admins can view all theses
       if (req.user && req.user.role === 'admin') {
         // Allow admin access - continue
       } else if (req.user) {
-        // Check if user is author
-        const authorIds = thesis.authors.map(a => a.id);
-        const isAuthor = authorIds.includes(req.user.id);
-        
         // Check if user is the assigned adviser
         const isAssignedAdviser = thesis.adviser_id === req.user.id;
         
@@ -538,18 +568,31 @@ router.get('/:id/download', optionalAuth, async (req, res) => {
     }
 
     // Check if user can download this thesis
-    // Public theses with Published status can be downloaded by anyone
+    // Students can only download their own draft theses
+    // Public theses with Published status can be downloaded by anyone (except students)
     // Private theses or non-published theses require authentication
     // Admins and advisers can download all theses they have access to
-    if (!thesis.is_public || thesis.status !== 'Published') {
+    
+    // Check if user is author
+    const authorIds = thesis.authors.map(a => a.id);
+    const isAuthor = req.user && authorIds.includes(req.user.id);
+    
+    // Students can only download their own draft theses
+    if (req.user && req.user.role === 'student') {
+      if (!isAuthor || thesis.status !== 'Draft') {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. Students can only download their own draft theses.'
+        });
+      }
+      // Allow access - student is downloading their own draft
+    } else if (!thesis.is_public || thesis.status !== 'Published') {
+      // For non-students: Public theses with Published status can be downloaded by anyone
+      // Private theses or non-published theses require authentication
       // Admins can download all theses
       if (req.user && req.user.role === 'admin') {
         // Allow admin access - continue
       } else if (req.user) {
-        // Check if user is author
-        const authorIds = thesis.authors.map(a => a.id);
-        const isAuthor = authorIds.includes(req.user.id);
-        
         // Check if user is the assigned adviser
         const isAssignedAdviser = thesis.adviser_id === req.user.id;
         
@@ -1139,6 +1182,14 @@ router.put('/:id', protect, [
 
     // Status update permissions
     if (req.body.status) {
+      // Prevent admins from approving theses directly - only advisers can approve
+      if (req.body.status === 'Approved' && isAdmin && !isAdviserInDepartment) {
+        return res.status(403).json({
+          success: false,
+          message: 'Admins cannot approve theses directly. Only advisers can approve theses. Admins can only publish already-approved theses.'
+        });
+      }
+
       // Only admins can publish theses, and only if they are Approved
       if (req.body.status === 'Published') {
         if (!isAdmin) {
@@ -1151,7 +1202,7 @@ router.put('/:id', protect, [
         if (thesis.status !== 'Approved') {
           return res.status(400).json({
             success: false,
-            message: 'Only approved theses can be published. Rejected theses cannot be published.'
+            message: 'Only approved theses can be published. The thesis must be approved by an adviser first. Current status: ' + thesis.status
           });
         }
       }
@@ -1202,9 +1253,26 @@ router.put('/:id', protect, [
     if (req.body.semester) updateData.semester = req.body.semester;
     if (req.body.category) updateData.category = req.body.category;
     if (req.body.adviserId) updateData.adviser_id = req.body.adviserId;
-    if (req.body.status) updateData.status = req.body.status;
-    // Only admins can change isPublic or publish
-    if (req.body.isPublic !== undefined && isAdmin) {
+    if (req.body.status) {
+      updateData.status = req.body.status;
+      
+      // If status is being set to Approved, record the reviewer (adviser)
+      if (req.body.status === 'Approved' && isAdviserInDepartment) {
+        updateData.reviewer_id = req.user.id;
+        updateData.reviewed_at = new Date();
+        if (req.body.reviewComments) updateData.review_comments = req.body.reviewComments;
+        if (req.body.reviewScore) updateData.review_score = req.body.reviewScore;
+      }
+      
+      // If status is being set to Published by admin, set published_at
+      if (req.body.status === 'Published' && isAdmin) {
+        updateData.published_at = new Date();
+        updateData.is_public = true;
+      }
+    }
+    
+    // Only admins can change isPublic manually (but it's auto-set when publishing)
+    if (req.body.isPublic !== undefined && isAdmin && req.body.status !== 'Published') {
       updateData.is_public = req.body.isPublic;
     }
     // If adviser approves, don't automatically make it public (admin must publish)
