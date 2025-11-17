@@ -182,15 +182,24 @@ export const AuthProvider = ({ children }) => {
       const response = await authAPI.register(userData);
       const { user, token } = response.data;
 
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
-      dispatch({
-        type: 'AUTH_SUCCESS',
-        payload: { user, token },
-      });
-
-      toast.success(`Welcome to One Faith One Archive, ${user.firstName}!`);
-      return { success: true };
+      // If token exists (admin users), login immediately
+      // Otherwise, user needs approval
+      if (token) {
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+        dispatch({
+          type: 'AUTH_SUCCESS',
+          payload: { user, token },
+        });
+        toast.success(`Welcome to One Faith One Archive, ${user.firstName}!`);
+        return { success: true, user, needsApproval: false };
+      } else {
+        // User registered but needs approval
+        dispatch({ type: 'AUTH_FAILURE', payload: null });
+        const message = response.data.message || 'Registration successful. Your account is pending admin approval.';
+        toast.success(message);
+        return { success: true, user, needsApproval: true, message };
+      }
     } catch (error) {
       const message = error.response?.data?.message || 'Registration failed';
       dispatch({

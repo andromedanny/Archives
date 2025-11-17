@@ -13,7 +13,9 @@ import {
   EyeIcon,
   EyeSlashIcon,
   CheckIcon,
-  XMarkIcon
+  XMarkIcon,
+  CheckCircleIcon,
+  XCircleIcon
 } from '@heroicons/react/24/outline';
 
 const AdminUsers = () => {
@@ -220,6 +222,32 @@ const AdminUsers = () => {
     }
   };
 
+  const handleApprove = async (userId) => {
+    if (window.confirm('Are you sure you want to approve this user?')) {
+      try {
+        await usersAPI.approveUser(userId);
+        toast.success('User approved successfully');
+        fetchUsers();
+      } catch (error) {
+        console.error('Error approving user:', error);
+        toast.error(error.response?.data?.message || 'Failed to approve user');
+      }
+    }
+  };
+
+  const handleReject = async (userId) => {
+    if (window.confirm('Are you sure you want to reject this user? They will not be able to login.')) {
+      try {
+        await usersAPI.rejectUser(userId);
+        toast.success('User rejected successfully');
+        fetchUsers();
+      } catch (error) {
+        console.error('Error rejecting user:', error);
+        toast.error(error.response?.data?.message || 'Failed to reject user');
+      }
+    }
+  };
+
   const handleDelete = async (userId, forceDelete = false) => {
     const user = users.find(u => u.id === userId);
     const userName = user ? `${user.firstName} ${user.lastName}` : 'this user';
@@ -318,6 +346,7 @@ const AdminUsers = () => {
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Email</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Role</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Department</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Status</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">Actions</th>
                     </tr>
                   </thead>
@@ -347,7 +376,38 @@ const AdminUsers = () => {
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600 border-b">{user.department}</td>
                         <td className="px-4 py-3 text-sm border-b">
-                          <div className="flex gap-2">
+                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                            user.approval_status === 'approved' 
+                              ? 'bg-green-100 text-green-800'
+                              : user.approval_status === 'pending'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {user.approval_status ? user.approval_status.charAt(0).toUpperCase() + user.approval_status.slice(1) : 'Pending'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm border-b">
+                          <div className="flex gap-2 flex-wrap">
+                            {user.approval_status === 'pending' && (
+                              <>
+                                <button
+                                  onClick={() => handleApprove(user.id)}
+                                  className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                                  title="Approve User"
+                                >
+                                  <CheckCircleIcon className="h-4 w-4" />
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleReject(user.id)}
+                                  className="flex items-center gap-1 px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors"
+                                  title="Reject User"
+                                >
+                                  <XCircleIcon className="h-4 w-4" />
+                                  Reject
+                                </button>
+                              </>
+                            )}
                             <button
                               onClick={() => handleEdit(user)}
                               className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"

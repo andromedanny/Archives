@@ -100,12 +100,20 @@ const Register = () => {
     });
 
     if (result.success) {
-      // Redirect based on user role
-      const user = JSON.parse(localStorage.getItem('user'));
-      if (user?.role === 'admin') {
-        navigate('/admin');
+      if (result.needsApproval) {
+        // Show success message and redirect to login
+        setError(''); // Clear any errors
+        setTimeout(() => {
+          navigate('/auth/login');
+        }, 2000);
       } else {
-        navigate('/dashboard');
+        // Admin user - redirect immediately
+        const user = JSON.parse(localStorage.getItem('user'));
+        if (user?.role === 'admin') {
+          navigate('/admin');
+        } else {
+          navigate('/dashboard');
+        }
       }
     } else {
       setError(result.error || 'Registration failed');

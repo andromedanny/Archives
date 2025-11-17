@@ -120,6 +120,72 @@ router.get('/', protect, [
   }
 });
 
+// @desc    Approve user
+// @route   PUT /api/users/:id/approve
+// @access  Private (Admin only)
+router.put('/:id/approve', protect, authorize('admin'), async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    await user.update({ approval_status: 'approved' });
+
+    const userData = user.toJSON();
+    delete userData.password;
+
+    res.json({
+      success: true,
+      message: 'User approved successfully',
+      data: userData
+    });
+  } catch (error) {
+    console.error('Approve user error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @desc    Reject user
+// @route   PUT /api/users/:id/reject
+// @access  Private (Admin only)
+router.put('/:id/reject', protect, authorize('admin'), async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    await user.update({ approval_status: 'rejected' });
+
+    const userData = user.toJSON();
+    delete userData.password;
+
+    res.json({
+      success: true,
+      message: 'User rejected successfully',
+      data: userData
+    });
+  } catch (error) {
+    console.error('Reject user error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
 // @desc    Get single user - ALL ROLES CAN VIEW
 // @route   GET /api/users/:id
 // @access  Private
@@ -193,6 +259,7 @@ router.post('/', protect, authorize('admin'), [
     }
 
     // Prepare user data for creation
+    // Admin-created users are auto-approved
     const createData = {
       firstName: req.body.firstName,
       lastName: req.body.lastName,
@@ -201,7 +268,8 @@ router.post('/', protect, authorize('admin'), [
       role: req.body.role,
       department: req.body.department,
       student_id: req.body.studentId || null,
-      is_active: true
+      is_active: true,
+      approval_status: req.body.role === 'admin' ? 'approved' : 'approved' // Admin-created users are auto-approved
     };
     
     // Only include phone if it's provided and not empty

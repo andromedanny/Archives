@@ -97,6 +97,8 @@ export const usersAPI = {
   getUserStats: (id) => api.get(`/users/${id}/stats`),
   getFaculty: () => api.get('/users/faculty/list'),
   getUsersByDepartment: (department) => api.get(`/users/department/${department}`),
+  approveUser: (id) => api.put(`/users/${id}/approve`),
+  rejectUser: (id) => api.put(`/users/${id}/reject`),
 };
 
 // Thesis API

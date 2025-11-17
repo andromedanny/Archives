@@ -114,6 +114,11 @@ const User = sequelize.define('User', {
   is_email_verified: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
+  },
+  approval_status: {
+    type: DataTypes.ENUM('pending', 'approved', 'rejected'),
+    defaultValue: 'pending',
+    allowNull: false
   }
 }, {
   tableName: 'users',
@@ -123,7 +128,8 @@ const User = sequelize.define('User', {
     { fields: ['department'] },
     { fields: ['course'] },
     { fields: ['role'] },
-    { fields: ['is_active'] }
+    { fields: ['is_active'] },
+    { fields: ['approval_status'] }
   ],
   hooks: {
     beforeCreate: async (user) => {

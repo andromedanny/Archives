@@ -59,7 +59,7 @@ router.post('/register', [
       });
     }
 
-    // Create user
+    // Create user with pending approval status (admin users are auto-approved)
     const user = await User.create({
       firstName,
       lastName,
@@ -69,27 +69,46 @@ router.post('/register', [
       course,
       role,
       student_id: studentId,
-      phone
+      phone,
+      approval_status: role === 'admin' ? 'approved' : 'pending'
     });
 
-    // Generate token
-    const token = generateToken(user.id);
-
-    res.status(201).json({
-      success: true,
-      message: 'User registered successfully',
-      token,
-      user: {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,
-        department: user.department,
-        course: user.course,
-        studentId: user.student_id
-      }
-    });
+    // Don't generate token for non-admin users - they need approval first
+    if (role === 'admin') {
+      const token = generateToken(user.id);
+      res.status(201).json({
+        success: true,
+        message: 'User registered successfully',
+        token,
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role,
+          department: user.department,
+          course: user.course,
+          studentId: user.student_id,
+          approvalStatus: user.approval_status
+        }
+      });
+    } else {
+      res.status(201).json({
+        success: true,
+        message: 'Registration successful. Your account is pending admin approval. You will be able to login once approved.',
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role,
+          department: user.department,
+          course: user.course,
+          studentId: user.student_id,
+          approvalStatus: user.approval_status
+        }
+      });
+    }
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({
@@ -128,7 +147,7 @@ router.post('/login', [
           { student_id: email }
         ]
       },
-      attributes: ['id', 'email', 'password', 'role', 'student_id', 'firstName', 'lastName', 'department', 'course', 'is_active']
+      attributes: ['id', 'email', 'password', 'role', 'student_id', 'firstName', 'lastName', 'department', 'course', 'is_active', 'approval_status']
     });
 
     if (!user) {
@@ -144,6 +163,21 @@ router.post('/login', [
         success: false,
         message: 'Account is deactivated. Please contact administrator.'
       });
+    }
+
+    // Check if user is approved (admin users are always approved)
+    if (user.role !== 'admin' && user.approval_status !== 'approved') {
+      if (user.approval_status === 'pending') {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account is pending admin approval. Please wait for approval before logging in.'
+        });
+      } else if (user.approval_status === 'rejected') {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account has been rejected. Please contact administrator for more information.'
+        });
+      }
     }
 
     // Check password
@@ -174,7 +208,8 @@ router.post('/login', [
         lastName: user.lastName,
         department: user.department,
         course: user.course,
-        studentId: user.student_id
+        studentId: user.student_id,
+        approvalStatus: user.approval_status
       }
     });
   } catch (error) {
@@ -209,6 +244,7 @@ router.get('/me', protect, async (req, res) => {
         phone: user.phone,
         avatar: user.avatar,
         isActive: user.is_active,
+        approvalStatus: user.approval_status,
         lastLogin: user.last_login,
         createdAt: user.createdAt
       }
