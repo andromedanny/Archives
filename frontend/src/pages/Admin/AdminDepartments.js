@@ -197,7 +197,11 @@ const AdminDepartments = () => {
                       <div className="flex justify-between items-start mb-2">
                         <div>
                           <h3 className="text-xl font-semibold text-gray-800">{dept.name}</h3>
-                          <p className="text-sm text-gray-500 uppercase tracking-wide">{dept.code}</p>
+                          <p className="text-sm text-gray-500">
+                            {dept.courses && dept.courses.length > 0
+                              ? `${dept.courses.length} Course${dept.courses.length > 1 ? 's' : ''}`
+                              : 'No courses yet'}
+                          </p>
                         </div>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           dept.is_active !== false
@@ -208,6 +212,26 @@ const AdminDepartments = () => {
                         </span>
                       </div>
                       <p className="text-sm text-gray-600 mb-3 whitespace-pre-line">{dept.description || 'No description provided.'}</p>
+                      {dept.courses && dept.courses.length > 0 && (
+                        <div className="mb-3">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Available Courses</p>
+                          <div className="flex flex-wrap gap-2">
+                            {dept.courses.slice(0, 4).map(course => (
+                              <span
+                                key={course.id}
+                                className="text-xs bg-blue-50 text-blue-800 px-2 py-1 rounded-full border border-blue-100"
+                              >
+                                {course.name}{course.code ? ` (${course.code})` : ''}
+                              </span>
+                            ))}
+                            {dept.courses.length > 4 && (
+                              <span className="text-xs text-gray-500">
+                                +{dept.courses.length - 4} more
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       <div className="space-y-1 text-sm text-gray-600">
                         {dept.head && <p><span className="font-medium">Head:</span> {dept.head}</p>}
                         {(dept.contactInfo || dept.email) && <p><span className="font-medium">Contact:</span> {dept.contactInfo || dept.email}</p>}
@@ -330,7 +354,7 @@ const AdminDepartments = () => {
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
-                      Department Code *
+                      Course *
                     </label>
                     <input
                       type="text"
@@ -506,7 +530,7 @@ const AdminDepartments = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Department Code *
+                      Course *
                     </label>
                     <input
                       type="text"
