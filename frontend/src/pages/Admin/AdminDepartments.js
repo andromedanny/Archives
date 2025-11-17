@@ -359,13 +359,6 @@ const AdminDepartments = () => {
                     
                     <div className="flex gap-2">
                       <button
-                        onClick={() => handleEdit(dept)}
-                        className="flex items-center gap-1 flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                      >
-                        <PencilIcon className="h-4 w-4" />
-                        Edit
-                      </button>
-                      <button
                         onClick={() => handleDelete(dept.id)}
                         className="flex items-center gap-1 flex-1 px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
                       >
