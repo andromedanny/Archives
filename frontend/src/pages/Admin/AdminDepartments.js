@@ -11,7 +11,7 @@ import {
   CheckIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline';
-import { adminAPI } from '../../services/api';
+import { adminAPI, coursesAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
 const AdminDepartments = () => {
@@ -23,6 +23,17 @@ const AdminDepartments = () => {
   const [showThesesModal, setShowThesesModal] = useState(false);
   const [editingDepartment, setEditingDepartment] = useState(null);
   const [selectedDepartment, setSelectedDepartment] = useState(null);
+  const [departmentCourses, setDepartmentCourses] = useState([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [editingCourse, setEditingCourse] = useState(null);
+  const [courseFormData, setCourseFormData] = useState({
+    name: '',
+    code: '',
+    level: 'Undergraduate',
+    description: '',
+    duration: '',
+    credits: ''
+  });
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -73,6 +84,8 @@ const AdminDepartments = () => {
       contactInfo: department.contactInfo || department.email || '',
       isActive: department.is_active !== false
     });
+    fetchDepartmentCourses(department.id);
+    resetCourseForm();
     setShowEditModal(true);
   };
 
@@ -147,6 +160,98 @@ const AdminDepartments = () => {
   const handleViewTheses = (department) => {
     setSelectedDepartment(department);
     setShowThesesModal(true);
+  };
+
+  const fetchDepartmentCourses = async (departmentId) => {
+    try {
+      setCoursesLoading(true);
+      const response = await coursesAPI.getCourses({ departmentId, limit: 100 });
+      if (response.data.success) {
+        setDepartmentCourses(response.data.data || []);
+      } else {
+        toast.error('Failed to load courses');
+      }
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+      toast.error('Failed to load courses');
+    } finally {
+      setCoursesLoading(false);
+    }
+  };
+
+  const resetCourseForm = () => {
+    setCourseFormData({
+      name: '',
+      code: '',
+      level: 'Undergraduate',
+      description: '',
+      duration: '',
+      credits: ''
+    });
+    setEditingCourse(null);
+  };
+
+  const handleCourseInputChange = (e) => {
+    const { name, value } = e.target;
+    setCourseFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleEditCourse = (course) => {
+    setEditingCourse(course);
+    setCourseFormData({
+      name: course.name || '',
+      code: course.code || '',
+      level: course.level || 'Undergraduate',
+      description: course.description || '',
+      duration: course.duration ? String(course.duration) : '',
+      credits: course.credits ? String(course.credits) : ''
+    });
+  };
+
+  const handleDeleteCourse = async (courseId) => {
+    if (!editingDepartment) return;
+    if (!window.confirm('Delete this course? This cannot be undone.')) return;
+    try {
+      await coursesAPI.deleteCourse(courseId);
+      toast.success('Course deleted');
+      await fetchDepartmentCourses(editingDepartment.id);
+    } catch (error) {
+      console.error('Error deleting course:', error);
+      toast.error(error.response?.data?.message || 'Failed to delete course');
+    }
+  };
+
+  const handleSaveCourse = async (e) => {
+    e.preventDefault();
+    if (!editingDepartment) return;
+
+    const payload = {
+      name: courseFormData.name.trim(),
+      code: courseFormData.code.trim(),
+      level: courseFormData.level,
+      description: courseFormData.description.trim() || null,
+      duration: courseFormData.duration ? parseInt(courseFormData.duration, 10) : null,
+      credits: courseFormData.credits ? parseInt(courseFormData.credits, 10) : null,
+      departmentId: editingDepartment.id
+    };
+
+    try {
+      if (editingCourse) {
+        await coursesAPI.updateCourse(editingCourse.id, payload);
+        toast.success('Course updated');
+      } else {
+        await coursesAPI.createCourse(payload);
+        toast.success('Course added');
+      }
+      await fetchDepartmentCourses(editingDepartment.id);
+      resetCourseForm();
+    } catch (error) {
+      console.error('Error saving course:', error);
+      toast.error(error.response?.data?.message || 'Failed to save course');
+    }
   };
 
 
@@ -607,6 +712,8 @@ const AdminDepartments = () => {
                     onClick={() => {
                       setShowEditModal(false);
                       setEditingDepartment(null);
+                      setDepartmentCourses([]);
+                      resetCourseForm();
                     }}
                     className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
                   >
@@ -619,6 +726,160 @@ const AdminDepartments = () => {
                     <CheckIcon className="h-4 w-4" />
                     Update Department
                   </button>
+                </div>
+
+                <div className="border-t border-gray-200 pt-6 mt-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-800">Courses</h3>
+                      <p className="text-sm text-gray-500">Add or edit courses offered under this department.</p>
+                    </div>
+                    <span className="text-sm text-gray-500">{departmentCourses.length} total</span>
+                  </div>
+
+                  <form onSubmit={handleSaveCourse} className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3 mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Course Name *</label>
+                        <input
+                          type="text"
+                          name="name"
+                          value={courseFormData.name}
+                          onChange={handleCourseInputChange}
+                          required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="e.g., BS Computer Science"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Course Code *</label>
+                        <input
+                          type="text"
+                          name="code"
+                          value={courseFormData.code}
+                          onChange={handleCourseInputChange}
+                          required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="e.g., BSCS"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Level *</label>
+                        <select
+                          name="level"
+                          value={courseFormData.level}
+                          onChange={handleCourseInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="Undergraduate">Undergraduate</option>
+                          <option value="Graduate">Graduate</option>
+                          <option value="Doctoral">Doctoral</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Duration (years)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          name="duration"
+                          value={courseFormData.duration}
+                          onChange={handleCourseInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="e.g., 4"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Credits</label>
+                        <input
+                          type="number"
+                          min="1"
+                          name="credits"
+                          value={courseFormData.credits}
+                          onChange={handleCourseInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="e.g., 180"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+                      <textarea
+                        name="description"
+                        value={courseFormData.description}
+                        onChange={handleCourseInputChange}
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Optional course description"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      {editingCourse && (
+                        <button
+                          type="button"
+                          onClick={resetCourseForm}
+                          className="px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                        >
+                          Cancel Edit
+                        </button>
+                      )}
+                      <button
+                        type="submit"
+                        className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                      >
+                        {editingCourse ? 'Update Course' : 'Add Course'}
+                      </button>
+                    </div>
+                  </form>
+
+                  <div className="space-y-2">
+                    {coursesLoading ? (
+                      <div className="text-center py-6 text-gray-500 text-sm">Loading courses...</div>
+                    ) : departmentCourses.length === 0 ? (
+                      <div className="text-center py-6 text-gray-500 text-sm">
+                        No courses yet. Use the form above to add one.
+                      </div>
+                    ) : (
+                      departmentCourses.map((course) => (
+                        <div key={course.id} className="border border-gray-200 rounded-md p-3 bg-gray-50">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-semibold text-gray-800 text-sm">{course.name}</p>
+                              <p className="text-xs text-gray-500 uppercase tracking-wide">{course.code}</p>
+                              <p className="text-xs text-gray-500 mt-1">{course.level}</p>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                              course.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-600'
+                            }`}>
+                              {course.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
+                          {course.description && (
+                            <p className="text-xs text-gray-600 mt-2 line-clamp-2">
+                              {course.description}
+                            </p>
+                          )}
+                          <div className="flex gap-2 mt-3">
+                            <button
+                              type="button"
+                              onClick={() => handleEditCourse(course)}
+                              className="flex-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCourse(course.id)}
+                              className="flex-1 px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </form>
             </div>
